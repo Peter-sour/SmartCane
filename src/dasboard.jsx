@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from "react";
 import { Battery, MapPin, Shield, Clock, Activity, AlertTriangle, Smartphone, Wifi, Settings } from 'lucide-react';
 import { BrowserRouter as Router, Switch, Route, useHistory } from "react-router-dom";
 
-export default function Dashboard() {
+export default function Dasboard() {
 
   const history = useHistory();
 
@@ -25,6 +25,30 @@ export default function Dashboard() {
     if (percentage > 30) return '⚡';
     return '🪫';
   };
+  const [location, setLocation] = useState({
+    latitude: null,
+    longitude: null,
+    accuracy: null,
+  });
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      // watchPosition → update realtime
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setLocation({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy, // dalam meter
+          });
+        },
+        (err) => console.error("Error getting location:", err),
+        { enableHighAccuracy: true } // biar pakai GPS
+      );
+
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -219,22 +243,31 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-slate-900 font-bold text-sm sm:text-base lg:text-lg">
-                      📍 Lokasi Saat Ini
-                    </div>
-                    <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-white/60">
-                      <div className="text-slate-700 font-mono text-xs sm:text-sm">
-                        -7.25764, 112.75246
+                   <div className="space-y-2">
+                      <div className="text-slate-900 font-bold text-sm sm:text-base lg:text-lg">
+                        📍 Lokasi Saat Ini
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        Surabaya, Jawa Timur
+
+                      <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-white/60">
+                        <div className="text-slate-700 font-mono text-xs sm:text-sm">
+                          {location.latitude && location.longitude
+                            ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+                            : "Mengambil lokasi..."}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {location.accuracy
+                            ? `Akurasi: ±${Math.round(location.accuracy)} m`
+                            : "Menunggu akurasi..."}
+                        </div>
                       </div>
+
+                      <button
+                        onClick={() => history.push("/map")}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition cursor-pointer"
+                      >
+                        Buka Maps Tracker
+                      </button>
                     </div>
-                    <div className="text-xs text-slate-500 bg-white/80 rounded-full px-3 py-1.5 inline-block border border-white/60">
-                      🗺️ Maps integration ready
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
