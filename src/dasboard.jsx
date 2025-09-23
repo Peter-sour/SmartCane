@@ -34,35 +34,20 @@ export default function Dasboard() {
   });
 
   useEffect(() => {
-    let watchId;
+    let intervalId;
 
-    const startWatch = async () => {
-      if (Capacitor.isNativePlatform()) {
-        // 📱 Jalan di Android/iOS pakai Capacitor Geolocation
-        await Geolocation.requestPermissions();
-
-        const id = await Geolocation.watchPosition(
-          { enableHighAccuracy: true },
-          (pos, err) => {
-            if (pos) {
-              setLocation({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-              });
-            }
-            if (err) {
-              console.error("Error (Capacitor Geolocation):", err);
-            }
-          }
-        );
-
-        // simpan id watch biar bisa di-clear nanti
-        watchId = id;
-      } else {
-        // 🌐 Jalan di Web pakai navigator.geolocation
-        if (navigator.geolocation) {
-          watchId = navigator.geolocation.watchPosition(
+    const updateLocation = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          await Geolocation.requestPermissions();
+          const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+          setLocation({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+        } else if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
             (pos) => {
               setLocation({
                 latitude: pos.coords.latitude,
@@ -70,25 +55,18 @@ export default function Dasboard() {
                 accuracy: pos.coords.accuracy,
               });
             },
-            (err) => console.error("Error (Web Geolocation):", err),
+            (err) => console.error("Error (Web):", err),
             { enableHighAccuracy: true }
           );
-        } else {
-          console.error("Browser tidak mendukung Geolocation API");
         }
+      } catch (err) {
+        console.error("Error getting location:", err);
       }
     };
 
-    startWatch();
+    intervalId = setInterval(updateLocation, 1000); // update tiap 1 detik
 
-    return () => {
-      // cleanup kalau komponen unmount
-      if (Capacitor.isNativePlatform()) {
-        Geolocation.clearWatch({ id: watchId });
-      } else if (navigator.geolocation && watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
+    return () => clearInterval(intervalId);
   }, []);
 
   return (
