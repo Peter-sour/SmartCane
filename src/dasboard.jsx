@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Battery, MapPin, Shield, Clock, Activity, AlertTriangle, Smartphone, Wifi, Settings } from 'lucide-react';
 import { BrowserRouter as Router, Switch, Route, useHistory } from "react-router-dom";
+import { Geolocation } from "@capacitor/geolocation";
+import { Capacitor } from "@capacitor/core";
 
 export default function Dasboard() {
 
@@ -32,22 +34,61 @@ export default function Dasboard() {
   });
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      // watchPosition → update realtime
-      const watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setLocation({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy: pos.coords.accuracy, // dalam meter
-          });
-        },
-        (err) => console.error("Error getting location:", err),
-        { enableHighAccuracy: true } // biar pakai GPS
-      );
+    let watchId;
 
-      return () => navigator.geolocation.clearWatch(watchId);
-    }
+    const startWatch = async () => {
+      if (Capacitor.isNativePlatform()) {
+        // 📱 Jalan di Android/iOS pakai Capacitor Geolocation
+        await Geolocation.requestPermissions();
+
+        const id = await Geolocation.watchPosition(
+          { enableHighAccuracy: true },
+          (pos, err) => {
+            if (pos) {
+              setLocation({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+            }
+            if (err) {
+              console.error("Error (Capacitor Geolocation):", err);
+            }
+          }
+        );
+
+        // simpan id watch biar bisa di-clear nanti
+        watchId = id;
+      } else {
+        // 🌐 Jalan di Web pakai navigator.geolocation
+        if (navigator.geolocation) {
+          watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+              setLocation({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+            },
+            (err) => console.error("Error (Web Geolocation):", err),
+            { enableHighAccuracy: true }
+          );
+        } else {
+          console.error("Browser tidak mendukung Geolocation API");
+        }
+      }
+    };
+
+    startWatch();
+
+    return () => {
+      // cleanup kalau komponen unmount
+      if (Capacitor.isNativePlatform()) {
+        Geolocation.clearWatch({ id: watchId });
+      } else if (navigator.geolocation && watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
   }, []);
 
   return (
