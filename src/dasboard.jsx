@@ -253,16 +253,13 @@ export default function Dasboard() {
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-blue-500/10"></div>
               <div className="relative h-full flex items-center justify-center">
                 <div className="text-center space-y-3 sm:space-y-4">
-                  <div className="relative mx-auto">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500">
+                  {/* <div className="relative mx-auto">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16  bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500">
                       <MapPin className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-bounce" />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-green-400 rounded-full border-2 border-white flex items-center justify-center">
-                      <span className="text-xs">📍</span>
-                    </div>
-                  </div>
+                  </div> */}
 
-                   <div className="space-y-2">
+                  <div className="space-y-2">
                       <div className="text-slate-900 font-bold text-sm sm:text-base lg:text-lg">
                         📍 Lokasi Saat Ini
                       </div>
