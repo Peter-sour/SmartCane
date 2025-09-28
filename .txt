@@ -1,0 +1,629 @@
+/* esp32_tongkat_pintar_id.ino
+    ESP32 + VL53L0X + MPU6050 + buzzer + monitor baterai
+    - deteksi aktivitas lanjutan (diam/jalan/lari/berputar/goyang/jatuh)
+    - perataan data & deteksi langkah (berdasarkan puncak)
+    - antrian untuk pesan yang belum terkirim, retry dengan backoff
+    - mengirim JSON ke backend HTTP POST
+*/
+
+/* ---------- PUSTAKA ---------- */
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include "Adafruit_VL53L0X.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+
+/* ---------- KONFIGURASI PENGGUNA ---------- */
+// WiFi
+const char* SSID_WIFI = "Malakul";
+const char* KATA_SANDI_WIFI = "malak123";
+
+// Backend (ganti ke IP laptopmu, contohnya "http://192.168.1.10:5000/api/data")
+const char* URL_SERVER = "http://10.52.73.203:5000/api/data";
+
+// Info perangkat
+const char* ID_PERANGKAT = "tongkat-001";
+
+/* ---------- PIN HARDWARE ---------- */
+#define PIN_SDA 21
+#define PIN_SCL 22
+#define PIN_BUZZER 23
+#define PIN_BATERAI 34  // pin ADC (melalui voltage divider)
+
+/* ---------- SENSOR ---------- */
+Adafruit_VL53L0X sensorJarak = Adafruit_VL53L0X();
+Adafruit_MPU6050 sensorGerak;
+
+/* ---------- WAKTU ---------- */
+unsigned long waktuSensorTerakhir = 0;
+const unsigned long INTERVAL_SENSOR_MS = 120;  // tingkat sampling sensor (~8 Hz)
+unsigned long waktuKirimTerakhir = 0;
+const unsigned long INTERVAL_KIRIM_MS = 2000;   // kirim data berkala setiap 2s
+
+/* ---------- PARAMETER DETEKSI AKTIVITAS ---------- */
+const float GRAVITASI = 9.80665f;
+
+/* ---------- ENUM STATUS AKTIVITAS (DIPINDAHKAN KE ATAS) ---------- */
+enum StatusAktivitas {
+  STATUS_TIDAK_DIKENAL,
+  STATUS_DIAM,
+  STATUS_JALAN,
+  STATUS_LARI,
+  STATUS_BERPUTAR,
+  STATUS_GOYANG,
+  STATUS_JATUH
+};
+
+/* ---------- PARAMETER AKURASI SENSOR ---------- */
+// Akurasi Sensor Jarak (VL53L0X)
+const int UKURAN_BUFFER_JARAK = 5;
+float bufferJarak[UKURAN_BUFFER_JARAK];
+int indeksBufferJarak = 0;
+bool bufferJarakPenuh = false;
+const float AMBANG_STANDAR_DEVIASI_JARAK = 10.0f; // cm
+
+// Akurasi Gyroscope
+const int UKURAN_BUFFER_GYRO = 8;
+float bufferGyroX[UKURAN_BUFFER_GYRO];
+float bufferGyroY[UKURAN_BUFFER_GYRO];
+float bufferGyroZ[UKURAN_BUFFER_GYRO];
+int indeksBufferGyro = 0;
+bool bufferGyroPenuh = false;
+const float AMBANG_STANDAR_DEVIASI_GYRO = 0.5f; // rad/s
+
+// Akurasi Accelerometer
+const int UKURAN_BUFFER_AKSEL = 8;
+float bufferAkselX[UKURAN_BUFFER_AKSEL];
+float bufferAkselY[UKURAN_BUFFER_AKSEL];
+float bufferAkselZ[UKURAN_BUFFER_AKSEL];
+int indeksBufferAksel = 0;
+bool bufferAkselPenuh = false;
+const float AMBANG_STANDAR_DEVIASI_AKSEL = 1.0f; // m/s^2
+
+// Deteksi langkah & gerakan
+const int UKURAN_JENDELA_PERATA = 12;        // jendela rata-rata bergerak untuk deviasi_aksel
+float jendelaDeviasiAksel[UKURAN_JENDELA_PERATA];
+int indeksJendelaAksel = 0;
+bool jendelaAkselPenuh = false;
+
+// Deteksi langkah (berdasarkan puncak)
+const float AMBANG_PUNCAK_LANGKAH = 1.2f;   // m/s^2 (sesuaikan)
+const unsigned long DEBOUNCE_LANGKAH_MS = 300;
+unsigned long waktuLangkahTerakhir = 0;
+
+// Jendela geser penghitungan langkah (ms)
+const unsigned long JENDELA_HITUNG_LANGKAH_MS = 2000;
+const int MAKS_REKAMAN_LANGKAH = 50;
+unsigned long waktuLangkah[MAKS_REKAMAN_LANGKAH];
+int kepalanWaktuLangkah = 0;
+int jumlahWaktuLangkah = 0;
+
+// Deteksi jatuh
+bool terdeteksijatuhBebas = false;
+unsigned long waktuJatuhBebas = 0;
+const float AMBANG_JATUH_BEBAS = 2.5f; // jika magnitudo aksel < ini -> kandidat jatuh bebas
+const float AMBANG_BENTURAN_JATUH = 25.0f;  // puncak benturan setelah jatuh bebas
+const unsigned long JENDELA_BENTURAN_JATUH_MS = 1200;
+
+// Berputar / rotasi
+const float AMBANG_PUTAR_GYRO = 3.0f; // rad/s (sesuaikan)
+
+// Deteksi goyang
+const float AMBANG_GOYANG = 8.0f;  // lonjakan besar multi-sumbu
+
+/* ---------- BATERAI ---------- */
+// Pembagi tegangan: Vbat -> R1 -> simpul(A) -> R2 -> GND
+// A terhubung ke ADC. Jika R1==R2, kalikan tegangan ADC dengan 2 untuk mendapat Vbat.
+const float REF_ADC = 3.3f;
+const int MAKS_ADC = 4095; // 12-bit
+// pemetaan persentase baterai untuk LiPo (perkiraan)
+const float TEGANGAN_BATERAI_MIN = 3.00f; // 0%
+const float TEGANGAN_BATERAI_MAKS = 4.20f; // 100%
+
+/* ---------- ANTRIAN JARINGAN ---------- */
+const int UKURAN_ANTRIAN = 20;
+String antrianKirim[UKURAN_ANTRIAN];
+int kepalanAntrian = 0, ekorAntrian = 0, jumlahAntrian = 0;
+
+/* ---------- UTILITAS ---------- */
+unsigned long waktuSekarang() { return millis(); }
+
+void tambahKeAntrian(const String &pesan) {
+  if (jumlahAntrian >= UKURAN_ANTRIAN) {
+    // hapus yang paling lama
+    kepalanAntrian = (kepalanAntrian + 1) % UKURAN_ANTRIAN;
+    jumlahAntrian--;
+  }
+  antrianKirim[ekorAntrian] = pesan;
+  ekorAntrian = (ekorAntrian + 1) % UKURAN_ANTRIAN;
+  jumlahAntrian++;
+}
+
+bool ambilDariAntrian(String &keluaran) {
+  if (jumlahAntrian == 0) return false;
+  keluaran = antrianKirim[kepalanAntrian];
+  kepalanAntrian = (kepalanAntrian + 1) % UKURAN_ANTRIAN;
+  jumlahAntrian--;
+  return true;
+}
+
+/* ---------- JARINGAN ---------- */
+void hubungkanWiFi() {
+  Serial.printf("WiFi: menghubungkan ke %s\n", SSID_WIFI);
+  WiFi.begin(SSID_WIFI, KATA_SANDI_WIFI);
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {
+    Serial.print(".");
+    delay(300);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi terhubung. IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\nKoneksi WiFi gagal.");
+  }
+}
+
+// kirim JSON tunggal; mengembalikan true jika berhasil (2xx)
+bool kirimJson(const String &json) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+  HTTPClient http;
+  http.begin(URL_SERVER);
+  http.addHeader("Content-Type", "application/json");
+  int kode = http.POST(json);
+  http.end();
+  if (kode >= 200 && kode < 300) return true;
+  return false;
+}
+
+// coba kosongkan antrian (dipanggil setelah pengiriman berhasil)
+void kosongkanAntrian() {
+  if (jumlahAntrian == 0) return;
+  // coba hingga semua pesan
+  for (int i = 0; i < UKURAN_ANTRIAN && jumlahAntrian > 0; ++i) {
+    String pesan;
+    if (!ambilDariAntrian(pesan)) break;
+    if (!kirimJson(pesan)) {
+      // kembalikan ke depan
+      tambahKeAntrian(pesan);
+      break;
+    }
+  }
+}
+
+/* ---------- BANTUAN SENSOR ---------- */
+
+/* ---------- FUNGSI AKURASI SENSOR ---------- */
+// Fungsi untuk menghitung standar deviasi
+float hitungStandarDeviasi(float* data, int ukuran, float rataRata) {
+  if (ukuran <= 1) return 0.0f;
+  float jumlahKuadrat = 0.0f;
+  for (int i = 0; i < ukuran; i++) {
+    float selisih = data[i] - rataRata;
+    jumlahKuadrat += selisih * selisih;
+  }
+  return sqrt(jumlahKuadrat / (ukuran - 1));
+}
+
+// Akurasi Sensor Jarak
+void masukkanDataJarak(float jarak) {
+  if (jarak > 0) { // hanya masukkan data jarak yang valid
+    bufferJarak[indeksBufferJarak] = jarak;
+    indeksBufferJarak = (indeksBufferJarak + 1) % UKURAN_BUFFER_JARAK;
+    if (indeksBufferJarak == 0) bufferJarakPenuh = true;
+  }
+}
+
+float hitungAkurasiJarak() {
+  int ukuran = bufferJarakPenuh ? UKURAN_BUFFER_JARAK : indeksBufferJarak;
+  if (ukuran < 2) return 100.0f; // akurasi default jika data kurang
+
+  // Hitung rata-rata
+  float rataRata = 0.0f;
+  for (int i = 0; i < ukuran; i++) {
+    rataRata += bufferJarak[i];
+  }
+  rataRata /= ukuran;
+
+  // Hitung standar deviasi
+  float stdDev = hitungStandarDeviasi(bufferJarak, ukuran, rataRata);
+
+  // Konversi ke persentase akurasi (semakin rendah deviasi, semakin tinggi akurasi)
+  float akurasi = 100.0f - (stdDev / AMBANG_STANDAR_DEVIASI_JARAK * 100.0f);
+  if (akurasi < 0) akurasi = 0.0f;
+  if (akurasi > 100) akurasi = 100.0f;
+
+  return akurasi;
+}
+
+// Akurasi Gyroscope
+void masukkanDataGyro(float gx, float gy, float gz) {
+  bufferGyroX[indeksBufferGyro] = gx;
+  bufferGyroY[indeksBufferGyro] = gy;
+  bufferGyroZ[indeksBufferGyro] = gz;
+  indeksBufferGyro = (indeksBufferGyro + 1) % UKURAN_BUFFER_GYRO;
+  if (indeksBufferGyro == 0) bufferGyroPenuh = true;
+}
+
+float hitungAkurasiGyro() {
+  int ukuran = bufferGyroPenuh ? UKURAN_BUFFER_GYRO : indeksBufferGyro;
+  if (ukuran < 2) return 100.0f;
+
+  // Hitung rata-rata untuk setiap sumbu
+  float rataX = 0.0f, rataY = 0.0f, rataZ = 0.0f;
+  for (int i = 0; i < ukuran; i++) {
+    rataX += bufferGyroX[i];
+    rataY += bufferGyroY[i];
+    rataZ += bufferGyroZ[i];
+  }
+  rataX /= ukuran;
+  rataY /= ukuran;
+  rataZ /= ukuran;
+
+  // Hitung standar deviasi gabungan
+  float stdDevX = hitungStandarDeviasi(bufferGyroX, ukuran, rataX);
+  float stdDevY = hitungStandarDeviasi(bufferGyroY, ukuran, rataY);
+  float stdDevZ = hitungStandarDeviasi(bufferGyroZ, ukuran, rataZ);
+  float stdDevGabungan = (stdDevX + stdDevY + stdDevZ) / 3.0f;
+
+  // Konversi ke persentase akurasi
+  float akurasi = 100.0f - (stdDevGabungan / AMBANG_STANDAR_DEVIASI_GYRO * 100.0f);
+  if (akurasi < 0) akurasi = 0.0f;
+  if (akurasi > 100) akurasi = 100.0f;
+
+  return akurasi;
+}
+
+// Akurasi Accelerometer
+void masukkanDataAksel(float ax, float ay, float az) {
+  bufferAkselX[indeksBufferAksel] = ax;
+  bufferAkselY[indeksBufferAksel] = ay;
+  bufferAkselZ[indeksBufferAksel] = az;
+  indeksBufferAksel = (indeksBufferAksel + 1) % UKURAN_BUFFER_AKSEL;
+  if (indeksBufferAksel == 0) bufferAkselPenuh = true;
+}
+
+float hitungAkurasiAksel() {
+  int ukuran = bufferAkselPenuh ? UKURAN_BUFFER_AKSEL : indeksBufferAksel;
+  if (ukuran < 2) return 100.0f;
+
+  // Hitung rata-rata untuk setiap sumbu
+  float rataX = 0.0f, rataY = 0.0f, rataZ = 0.0f;
+  for (int i = 0; i < ukuran; i++) {
+    rataX += bufferAkselX[i];
+    rataY += bufferAkselY[i];
+    rataZ += bufferAkselZ[i];
+  }
+  rataX /= ukuran;
+  rataY /= ukuran;
+  rataZ /= ukuran;
+
+  // Hitung standar deviasi gabungan
+  float stdDevX = hitungStandarDeviasi(bufferAkselX, ukuran, rataX);
+  float stdDevY = hitungStandarDeviasi(bufferAkselY, ukuran, rataY);
+  float stdDevZ = hitungStandarDeviasi(bufferAkselZ, ukuran, rataZ);
+  float stdDevGabungan = (stdDevX + stdDevY + stdDevZ) / 3.0f;
+
+  // Konversi ke persentase akurasi
+  float akurasi = 100.0f - (stdDevGabungan / AMBANG_STANDAR_DEVIASI_AKSEL * 100.0f);
+  if (akurasi < 0) akurasi = 0.0f;
+  if (akurasi > 100) akurasi = 100.0f;
+
+  return akurasi;
+}
+
+/* ---------- FUNGSI SENSOR LAINNYA ---------- */
+int bacaPersentaseBaterai() {
+  int adc = analogRead(PIN_BATERAI);
+  float v = ( (float)adc / MAKS_ADC ) * REF_ADC;
+  // kalikan karena pembagi (anggap R1==R2)
+  float vbatt = v * 2.0f;
+  int pct = (int) (100.0f * (vbatt - TEGANGAN_BATERAI_MIN) / (TEGANGAN_BATERAI_MAKS - TEGANGAN_BATERAI_MIN));
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+  return pct;
+}
+
+float bacaTeganganBaterai() {
+  int adc = analogRead(PIN_BATERAI);
+  float v = ( (float)adc / MAKS_ADC ) * REF_ADC;
+  return v * 2.0f;
+}
+
+/* rata-rata bergerak untuk deviasi_aksel */
+void masukkanDeviasiAksel(float nilai) {
+  jendelaDeviasiAksel[indeksJendelaAksel] = nilai;
+  indeksJendelaAksel = (indeksJendelaAksel + 1) % UKURAN_JENDELA_PERATA;
+  if (indeksJendelaAksel == 0) jendelaAkselPenuh = true;
+}
+
+float dapatkanRataDeviasiAksel() {
+  int panjang = jendelaAkselPenuh ? UKURAN_JENDELA_PERATA : indeksJendelaAksel;
+  if (panjang == 0) return 0.0f;
+  float jumlah = 0.0f;
+  for (int i = 0; i < panjang; ++i) jumlah += jendelaDeviasiAksel[i];
+  return jumlah / panjang;
+}
+
+/* perekam langkah */
+void rekamLangkah(unsigned long t) {
+  waktuLangkah[(kepalanWaktuLangkah + jumlahWaktuLangkah) % MAKS_REKAMAN_LANGKAH] = t;
+  if (jumlahWaktuLangkah < MAKS_REKAMAN_LANGKAH) {
+    jumlahWaktuLangkah++;
+  } else {
+    // timpa yang paling lama
+    kepalanWaktuLangkah = (kepalanWaktuLangkah + 1) % MAKS_REKAMAN_LANGKAH;
+  }
+}
+
+int hitungLangkahDalamJendela(unsigned long jendelaMs) {
+  if (jumlahWaktuLangkah == 0) return 0;
+  unsigned long batasCutoff = millis() - jendelaMs;
+  int hitungan = 0;
+  for (int i = 0; i < jumlahWaktuLangkah; ++i) {
+    int indeks = (kepalanWaktuLangkah + i) % MAKS_REKAMAN_LANGKAH;
+    if (waktuLangkah[indeks] >= batasCutoff) hitungan++;
+  }
+  return hitungan;
+}
+
+/* ---------- DETEKSI AKTIVITAS ---------- */
+String aktivitasKeString(StatusAktivitas s){
+  switch(s){
+    case STATUS_DIAM: return "DIAM";
+    case STATUS_JALAN: return "JALAN";
+    case STATUS_LARI:  return "LARI";
+    case STATUS_BERPUTAR: return "BERPUTAR";
+    case STATUS_GOYANG: return "GOYANG";
+    case STATUS_JATUH: return "JATUH";
+    default: return "TIDAK_DIKENAL";
+  }
+}
+
+/* deteksi aktivitas, mengembalikan status dan juga string alasan (untuk debugging) */
+StatusAktivitas deteksiAktivitas(sensors_event_t &a, sensors_event_t &g) {
+  // hitung magnitudo dan deviasi akselerasi
+  float ax = a.acceleration.x;
+  float ay = a.acceleration.y;
+  float az = a.acceleration.z;
+  float magnitudoAksel = sqrt(ax*ax + ay*ay + az*az);
+  float deviasiAksel = fabs(magnitudoAksel - GRAVITASI);
+  masukkanDeviasiAksel(deviasiAksel);
+  float rataDeviasi = dapatkanRataDeviasiAksel();
+
+  // deteksi langkah: deteksi puncak dalam deviasiAksel
+  unsigned long wSekarang = millis();
+  if (deviasiAksel > AMBANG_PUNCAK_LANGKAH && (wSekarang - waktuLangkahTerakhir) > DEBOUNCE_LANGKAH_MS) {
+    waktuLangkahTerakhir = wSekarang;
+    rekamLangkah(wSekarang);
+  }
+  int langkahJendela = hitungLangkahDalamJendela(JENDELA_HITUNG_LANGKAH_MS);
+
+  // magnitudo giroskop
+  float gx = g.gyro.x;
+  float gy = g.gyro.y;
+  float gz = g.gyro.z;
+  float magnitudoGyro = sqrt(gx*gx + gy*gy + gz*gz);
+
+  // deteksi goyang: perubahan besar di sumbu manapun (relatif terhadap gravitasi)
+  bool goyang = (fabs(ax - 0) > AMBANG_GOYANG) || (fabs(ay - 0) > AMBANG_GOYANG) || (fabs(az - GRAVITASI) > AMBANG_GOYANG);
+
+  // deteksi jatuh: jatuh bebas kemudian benturan
+  if (!terdeteksijatuhBebas) {
+    if (magnitudoAksel < AMBANG_JATUH_BEBAS) {
+      terdeteksijatuhBebas = true;
+      waktuJatuhBebas = millis();
+      // jangan langsung nyatakan jatuh — tunggu benturan atau timeout
+    }
+  } else {
+    // menunggu benturan dalam jendela
+    if (magnitudoAksel > AMBANG_BENTURAN_JATUH && millis() - waktuJatuhBebas < JENDELA_BENTURAN_JATUH_MS) {
+      // benturan setelah jatuh bebas → jatuh terkonfirmasi
+      terdeteksijatuhBebas = false;
+      return STATUS_JATUH;
+    }
+    // jika terlalu lama berlalu, reset flag jatuh bebas
+    if (millis() - waktuJatuhBebas > JENDELA_BENTURAN_JATUH_MS) {
+      terdeteksijatuhBebas = false;
+    }
+  }
+
+  // jika akselerasi langsung sangat rendah (masih dalam jendela jatuh bebas), juga anggap jatuh
+  if (magnitudoAksel < 1.5f) {
+    return STATUS_JATUH;
+  }
+  // benturan besar langsung tanpa jatuh bebas sebelumnya mungkin terjatuh
+  if (deviasiAksel > 35.0f || magnitudoAksel > 40.0f) {
+    return STATUS_JATUH;
+  }
+
+  // berputar
+  if (magnitudoGyro > AMBANG_PUTAR_GYRO) {
+    return STATUS_BERPUTAR;
+  }
+  // goyang
+  if (goyang) {
+    return STATUS_GOYANG;
+  }
+  // deteksi jalan / lari melalui tingkat langkah & rataDeviasi
+  // langkahJendela = jumlah langkah dalam JENDELA_HITUNG_LANGKAH_MS terakhir (mis. 2s)
+  float tingkatLangkahPerDetik = (float)langkahJendela / ((float)JENDELA_HITUNG_LANGKAH_MS / 1000.0f);
+  if (tingkatLangkahPerDetik > 1.8 || rataDeviasi > 2.0f) { // heuristik lari
+    return STATUS_LARI;
+  }
+  if (tingkatLangkahPerDetik >= 0.6 || rataDeviasi > 0.7f) {
+    return STATUS_JALAN;
+  }
+  // diam
+  return STATUS_DIAM;
+}
+
+/* ---------- SIAPKAN & KIRIM LAPORAN ---------- */
+String buatLaporanJson(float jarakCM, StatusAktivitas st, sensors_event_t &a, sensors_event_t &g) {
+  int persenBaterai = bacaPersentaseBaterai();
+  float teganganBat = bacaTeganganBaterai();
+  int kekuatanSinyal = (WiFi.status()==WL_CONNECTED) ? WiFi.RSSI() : 0;
+  unsigned long stempelWaktu = millis();
+
+  // Hitung akurasi sensor
+  float akurasiJarak = hitungAkurasiJarak();
+  float akurasiGyro = hitungAkurasiGyro();
+  float akurasiAksel = hitungAkurasiAksel();
+
+  // bangun JSON secara manual
+  String json = "{";
+  json += "\"id_perangkat\":\"" + String(ID_PERANGKAT) + "\",";
+  json += "\"stempel_waktu_ms\":" + String(stempelWaktu) + ",";
+  json += "\"jarak_cm\":" + String(jarakCM,1) + ",";
+  json += "\"aktivitas\":\"" + aktivitasKeString(st) + "\",";
+  json += "\"akselerasi\":{" + String("\"x\":") + String(a.acceleration.x,3) + "," + String("\"y\":") + String(a.acceleration.y,3) + "," + String("\"z\":") + String(a.acceleration.z,3) + "},";
+  json += "\"giroskop\":{" + String("\"x\":") + String(g.gyro.x,3) + "," + String("\"y\":") + String(g.gyro.y,3) + "," + String("\"z\":") + String(g.gyro.z,3) + "},";
+  json += "\"magnitudo_aksel\":" + String(sqrt(a.acceleration.x*a.acceleration.x + a.acceleration.y*a.acceleration.y + a.acceleration.z*a.acceleration.z),3) + ",";
+  json += "\"magnitudo_gyro\":" + String(sqrt(g.gyro.x*g.gyro.x + g.gyro.y*g.gyro.y + g.gyro.z*g.gyro.z),3) + ",";
+  json += "\"akurasi_jarak\":" + String(akurasiJarak,1) + ",";
+  json += "\"akurasi_gyro\":" + String(akurasiGyro,1) + ",";
+  json += "\"akurasi_aksel\":" + String(akurasiAksel,1) + ",";
+  json += "\"persen_baterai\":" + String(persenBaterai) + ",";
+  json += "\"tegangan_baterai\":" + String(teganganBat,2) + ",";
+  json += "\"kekuatan_sinyal\":" + String(kekuatanSinyal);
+  json += "}";
+  return json;
+}
+
+/* ---------- SETUP ---------- */
+void setup() {
+  Serial.begin(115200);
+  delay(50);
+
+  // inisialisasi ADC
+  analogReadResolution(12);
+
+  // inisialisasi I2C
+  Wire.begin(PIN_SDA, PIN_SCL);
+  pinMode(PIN_BUZZER, OUTPUT);
+  digitalWrite(PIN_BUZZER, LOW);
+
+  Serial.println("=== Tongkat Pintar (Lanjutan) ===");
+
+  // WiFi
+  hubungkanWiFi();
+
+  // VL53L0X
+  if (!sensorJarak.begin()) {
+    Serial.println("Inisialisasi VL53L0X GAGAL");
+    // kita tidak hang; izinkan operasi tapi jarak = -1
+  } else {
+    Serial.println("VL53L0X OK");
+  }
+
+  // MPU6050
+  if (!sensorGerak.begin()) {
+    Serial.println("Inisialisasi MPU6050 GAGAL");
+  } else {
+    Serial.println("MPU6050 OK");
+    sensorGerak.setAccelerometerRange(MPU6050_RANGE_8_G);
+    sensorGerak.setGyroRange(MPU6050_RANGE_500_DEG);
+    sensorGerak.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  }
+}
+
+/* ---------- LOOP UTAMA ---------- */
+void loop() {
+  unsigned long wSekarang = millis();
+
+  // pembacaan sensor berkala
+  if (wSekarang - waktuSensorTerakhir >= INTERVAL_SENSOR_MS) {
+    waktuSensorTerakhir = wSekarang;
+
+    // baca VL53L0X
+    VL53L0X_RangingMeasurementData_t pengukuran;
+    float jarakCM = -1;
+    sensorJarak.rangingTest(&pengukuran, false);
+    if (pengukuran.RangeStatus != 4) {
+      jarakCM = pengukuran.RangeMilliMeter / 10.0;
+    }
+
+    // Masukkan data jarak untuk perhitungan akurasi
+    masukkanDataJarak(jarakCM);
+
+    // baca MPU6050
+    sensors_event_t a, g, suhu;
+    sensorGerak.getEvent(&a, &g, &suhu);
+
+    // Masukkan data sensor untuk perhitungan akurasi
+    masukkanDataGyro(g.gyro.x, g.gyro.y, g.gyro.z);
+    masukkanDataAksel(a.acceleration.x, a.acceleration.y, a.acceleration.z);
+
+    // deteksi aktivitas
+    StatusAktivitas st = deteksiAktivitas(a, g);
+
+    // reaksi buzzer untuk situasi kritis
+    if (st == STATUS_JATUH) {
+      // alarm panjang
+      tone(PIN_BUZZER, 800, 1500);
+    } else if (jarakCM > 0 && jarakCM < 40) {
+      // rintangan kritis
+      tone(PIN_BUZZER, 2000, 200);
+    }
+
+    // bangun json
+    String laporan = buatLaporanJson(jarakCM, st, a, g);
+
+    // kirim langsung untuk kondisi kritis
+    bool segera = (st == STATUS_JATUH) || (jarakCM > 0 && jarakCM < 40);
+
+    // coba kirim
+    if (segera) {
+      if (kirimJson(laporan)) {
+        Serial.println("Kirim kejadian segera: " + laporan);
+        kosongkanAntrian();
+      } else {
+        Serial.println("Pengiriman segera gagal, masukkan antrian");
+        tambahKeAntrian(laporan);
+        hubungkanWiFi(); // coba sambung ulang
+      }
+      waktuKirimTerakhir = wSekarang;
+    } else {
+      // masukkan antrian atau kirim berkala
+      tambahKeAntrian(laporan);
+    }
+  }
+
+  // kosongkan antrian berkala / kirim
+  if (wSekarang - waktuKirimTerakhir >= INTERVAL_KIRIM_MS) {
+    waktuKirimTerakhir = wSekarang;
+    // coba kosongkan pesan antrian
+    // coba kirim pesan kepala dengan retry/backoff
+    if (jumlahAntrian > 0) {
+      String depan;
+      // lihat pesan pertama
+      depan = antrianKirim[kepalanAntrian];
+      if (kirimJson(depan)) {
+        // pop dan coba kosongkan lebih banyak
+        String dummy;
+        ambilDariAntrian(dummy); // hapus
+        kosongkanAntrian();
+        Serial.println("Berhasil mengosongkan pesan antrian");
+      } else {
+        Serial.println("Penggosongan gagal, akan coba lagi nanti");
+        // mungkin sambung ulang
+        hubungkanWiFi();
+      }
+    } else {
+      // opsional: heartbeat untuk memberitahu server bahwa kita hidup
+      String detak = "{\"id_perangkat\":\"" + String(ID_PERANGKAT) + "\",\"stempel_waktu_ms\":" + String(millis()) + ",\"detak_jantung\":1}";
+      if (!kirimJson(detak)) {
+        // abaikan kegagalan
+      }
+    }
+  }
+  // yield kecil agar WiFi/OTA dapat berjalan
+  delay(20);
+}
+
+mongod --dbpath D:\MongoDB\data\db
+mongosh
+
+mongodb+srv://Peterpan:@MALAKUL123@peterpan.rxtduy3.mongodb.net/iot?retryWrites=true&w=majority&appName=Peterpan

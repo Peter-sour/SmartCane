@@ -7,6 +7,7 @@ function MapsTracker() {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
   const markerRef = useRef(null);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [isMapReady, setIsMapReady] = useState(false);
@@ -55,7 +56,7 @@ function MapsTracker() {
 
   const initializeMap = () => {
     if (!mapRef.current || !window.L) return;
-    
+
     try {
       // Remove existing map if any
       if (leafletMapRef.current) {
@@ -87,7 +88,7 @@ function MapsTracker() {
       }).addTo(map);
 
       setIsMapReady(true);
-      
+
       // Get location after map is ready
       setTimeout(() => {
         getLocation();
@@ -111,7 +112,7 @@ function MapsTracker() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
-        
+
         if (leafletMapRef.current) {
           // Remove existing marker
           if (markerRef.current) {
@@ -180,25 +181,25 @@ function MapsTracker() {
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
           }
-          
+
           .custom-button {
             transition: all 0.3s ease;
           }
-          
+
           .custom-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
           }
-          
+
           .custom-button:active {
             transform: translateY(0);
           }
-          
+
           .leaflet-control-zoom {
             border: none !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
           }
-          
+
           .leaflet-control-zoom a {
             background: rgba(255, 255, 255, 0.9) !important;
             backdrop-filter: blur(10px) !important;
@@ -207,26 +208,26 @@ function MapsTracker() {
             font-weight: bold !important;
             transition: all 0.2s ease !important;
           }
-          
+
           .leaflet-control-zoom a:hover {
             background: rgba(255, 255, 255, 1) !important;
             transform: scale(1.05) !important;
           }
-          
+
           .pulse {
             animation: pulse 2s infinite;
           }
-          
+
           @keyframes pulse {
             0% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.1); opacity: 0.7; }
             100% { transform: scale(1); opacity: 1; }
           }
-          
+
           .loading-spinner {
             animation: spin 1s linear infinite;
           }
-          
+
           @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
@@ -275,8 +276,8 @@ function MapsTracker() {
             className="glassmorphism custom-button w-14 h-14 rounded-full flex items-center justify-center
                      text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RotateCcw 
-              size={20} 
+            <RotateCcw
+              size={20}
               className={`${isLoading ? 'loading-spinner' : ''}`}
             />
           </button>
