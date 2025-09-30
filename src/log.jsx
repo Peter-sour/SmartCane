@@ -49,16 +49,16 @@ export default function DetailSecurityPage() {
         action: 'Mode navigasi normal',
         resolved: true
       },
-      {
-        id: 4,
-        time: '21:58:42',
-        type: 'warning',
-        title: 'Cuaca Berubah',
-        description: 'Sensor mendeteksi hujan ringan',
-        location: 'Area sekitar pengguna',
-        action: 'Mode grip anti-slip diaktifkan',
-        resolved: true
-      },
+      // {
+      //   id: 4,
+      //   time: '21:58:42',
+      //   type: 'warning',
+      //   title: 'Cuaca Berubah',
+      //   description: 'Sensor mendeteksi hujan ringan',
+      //   location: 'Area sekitar pengguna',
+      //   action: 'Mode grip anti-slip diaktifkan',
+      //   resolved: true
+      // },
       {
         id: 5,
         time: '21:45:30',
@@ -195,8 +195,8 @@ export default function DetailSecurityPage() {
             {[
               { id: 'realtime', label: 'Real-time', icon: Activity },
               { id: 'history', label: 'Riwayat Alert', icon: Clock },
-              { id: 'sensors', label: 'Status Sensor', icon: Zap },
-              { id: 'settings', label: 'Pengaturan', icon: Settings }
+              { id: 'sensors', label: 'Status Sensor', icon: Zap }
+              // { id: 'settings', label: 'Pengaturan', icon: Settings }
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -378,8 +378,7 @@ export default function DetailSecurityPage() {
               ))}
             </div>
           )}
-
-          {/* Settings Tab */}
+          {/* Settings Tab
           {activeTab === 'settings' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/60">
@@ -441,7 +440,7 @@ export default function DetailSecurityPage() {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </div>

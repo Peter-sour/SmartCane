@@ -36,7 +36,7 @@ function Test() {
 
   useEffect(() => {
     fetchData();
-    const intervalId = setInterval(fetchData, 2000);
+    const intervalId = setInterval(fetchData, 100);
     return () => clearInterval(intervalId);
   }, []);
 
