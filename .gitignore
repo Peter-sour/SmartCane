@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 ./iot-backend/node_modules
+./iot-backend/.env
 dist
 dist-ssr
 *.local
