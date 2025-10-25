@@ -1,24 +1,73 @@
 import { useState } from "react";
 import { Link, useHistory } from "react-router-dom";
+import { AiFillEye, AiFillEyeInvisible } from "react-icons/ai";
+
+const API_URL = "http://localhost:5000/api/auth";
 
 export default function Register() {
   const nav = useHistory();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ 
+    name: "", 
+    email: "", 
+    password: ""
+  });
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [err, setErr] = useState("");
   const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // State terpisah untuk masing-masing kolom password
+  const [showPassword, setShowPassword] = useState(false); 
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  function submit(e) {
+  const handleChange = (e) => {
+    setForm((v) => ({ ...v, [e.target.name]: e.target.value }));
+  };
+
+  async function submit(e) {
     e.preventDefault();
     setErr("");
     setOk(false);
 
-    if (!form.name || !form.email || !form.password) {
-      setErr("Lengkapi semua field");
+    if (!form.name || !form.email || !form.password || !confirmPassword) {
+      setErr("Semua field wajib diisi.");
       return;
     }
-    setErr("");
-    setOk(true);
-    setTimeout(() => nav.push("/login"), 700);
+    
+    if (form.password !== confirmPassword) {
+      setErr("Konfirmasi password tidak cocok.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const dataToSend = { ...form, id_perangkat: "DUMMY-" + Date.now() };
+
+      const response = await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataToSend), 
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || "Registrasi gagal. Coba lagi.");
+      }
+
+      setOk(true);
+      setErr("");
+      setTimeout(() => nav.push("/login"), 1500);
+
+    } catch (error) {
+      setErr(error.message);
+      setOk(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -67,10 +116,11 @@ export default function Register() {
             <label className="text-sm text-slate-600">Nama</label>
             <input
               type="text"
+              name="name"
               className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:outline-none text-sm"
               placeholder="Nama Lengkap Anda"
               value={form.name}
-              onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
+              onChange={handleChange}
               required
             />
           </div>
@@ -79,33 +129,78 @@ export default function Register() {
             <label className="text-sm text-slate-600">Email</label>
             <input
               type="email"
+              name="email"
               className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:outline-none text-sm"
               placeholder="nama@email.com"
               value={form.email}
-              onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))}
+              onChange={handleChange}
               required
             />
           </div>
 
+          {/* Kolom Password */}
           <div>
             <label className="text-sm text-slate-600">Password</label>
-            <input
-              type="password"
-              className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:outline-none text-sm"
-              placeholder="********"
-              value={form.password}
-              onChange={(e) =>
-                setForm((v) => ({ ...v, password: e.target.value }))
-              }
-              required
-            />
+            <div className="relative">
+              <input
+                // Menggunakan state showPassword
+                type={showPassword ? "text" : "password"}
+                name="password"
+                className="w-full mt-1 pl-3 pr-10 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:outline-none text-sm"
+                placeholder="********"
+                value={form.password}
+                onChange={handleChange}
+                required
+              />
+              <button
+                type="button"
+                // Menggunakan handler untuk showPassword
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? (
+                  <AiFillEyeInvisible size={20} />
+                ) : (
+                  <AiFillEye size={20} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Kolom Konfirmasi Password */}
+          <div>
+            <label className="text-sm text-slate-600">Konfirmasi Password</label>
+            <div className="relative">
+              <input
+                // Menggunakan state showConfirmPassword
+                type={showConfirmPassword ? "text" : "password"}
+                className="w-full mt-1 pl-3 pr-10 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:outline-none text-sm"
+                placeholder="Ulangi password Anda"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                // Menggunakan handler untuk showConfirmPassword
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+              >
+                {showConfirmPassword ? (
+                  <AiFillEyeInvisible size={20} />
+                ) : (
+                  <AiFillEye size={20} />
+                )}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
-            className="w-full bg-gradient-to-tr from-indigo-500 to-cyan-400 text-white py-2 rounded-lg font-semibold shadow-sm hover:shadow-md hover:opacity-90 transition text-sm"
+            className="w-full bg-gradient-to-tr from-indigo-500 to-cyan-400 text-white py-2 rounded-lg font-semibold shadow-sm hover:shadow-md hover:opacity-90 transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
           >
-            Buat Akun
+            {loading ? "Mendaftar..." : "Buat Akun"}
           </button>
 
           <p className="text-center text-sm text-slate-600 mt-3">
