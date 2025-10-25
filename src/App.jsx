@@ -54,7 +54,7 @@ function App() {
           {isLoggedIn ? (
             <Redirect to={isMobile ? "/Dasboard" : "/Dasboard"} /> // Bisa kamu ubah kalau mobile mau ke lain
           ) : (
-            isMobile ? <Redirect to="/mobilelogin" /> : <Redirect to="/login" />
+            isMobile ? <Redirect to="/onboarding-mobile" /> : <Redirect to="/login" />
           )}
         </Route>
 
