@@ -15,7 +15,11 @@ import LandingPage from "./pages/LandingPage";
 import OnboardingScreen from "./pages/OnboardingScreen";
 import MobileLogin from "./mobile/MobileLogin";
 import MobileRegister from "./mobile/MobileRegister";
-import BackHandler from "./BackHandler";
+import BackHandler from "./BackHandler";  
+import MobileDasboard from "./mobile/MobileDashboard";
+import MobileLog from "./mobile/MobileLog";
+import MobileAdmin from "./mobile/MobileAdmin";
+import MobileAlert from "./mobile/MobileAlert";
 
 function App() {
   const [isMobile, setIsMobile] = useState(false);
@@ -62,6 +66,10 @@ function App() {
         <Route path="/onboarding-mobile" component={OnboardingScreen} />
         <Route path="/mobilelogin" component={MobileLogin} />
         <Route path="/mobileregister" component={MobileRegister} />
+        <Route path="/mobiledashboard" component={MobileDasboard} />
+        <Route path="/mobilelog" component={MobileLog} />
+        <Route path="/mobileadmin" component={MobileAdmin} />
+        <Route path="/mobilealert" component ={MobileAlert} />
 
         {/* 💻 Versi Desktop */}
         <Route path="/Dasboard" component={Dasboard} />

@@ -33,7 +33,7 @@ export default function Login() {
       console.log("token",data.token);
       localStorage.setItem("id_perangkat", data.id_perangkat);
       await Preferences.set({ key: "isLoggedIn", value: "true" });
-      nav.push("/Dasboard");
+      nav.push("/mobiledasboard");
     } catch (error) {
       setErr(error.message);
     } finally {

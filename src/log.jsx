@@ -378,69 +378,7 @@ export default function DetailSecurityPage() {
               ))}
             </div>
           )}
-          {/* Settings Tab
-          {activeTab === 'settings' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/60">
-                <h3 className="font-semibold text-slate-800 mb-6 flex items-center space-x-2">
-                  <Settings className="w-5 h-5 text-slate-600" />
-                  <span>Pengaturan Peringatan</span>
-                </h3>
-
-                <div className="space-y-6">
-                  {[
-                    { key: 'vibrationLevel', label: 'Tingkat Getaran', icon: Vibrate, unit: '%' },
-                    { key: 'soundLevel', label: 'Volume Suara', icon: Volume2, unit: '%' },
-                    { key: 'sensitivityLevel', label: 'Sensitivitas Sensor', icon: Eye, unit: '%' }
-                  ].map(({ key, label, icon: Icon, unit }) => (
-                    <div key={key} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Icon className="w-4 h-4 text-slate-500" />
-                          <span className="text-sm text-slate-700">{label}</span>
-                        </div>
-                        <span className="text-sm font-semibold text-slate-800">
-                          {securityData.settings[key]}{unit}
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-200 rounded-full h-2">
-                        <div
-                          className="h-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300"
-                          style={{ width: `${securityData.settings[key]}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/60">
-                <h3 className="font-semibold text-slate-800 mb-6">Mode & Preferensi</h3>
-
-                <div className="space-y-4">
-                  {[
-                    { key: 'autoMode', label: 'Mode Otomatis', desc: 'Sistem mengatur sendiri berdasarkan kondisi' },
-                    { key: 'nightMode', label: 'Mode Malam', desc: 'Sensitivitas tinggi untuk navigasi malam' },
-                    { key: 'emergencyContact', label: 'Kontak Darurat', desc: 'Kirim alert ke kontak darurat jika terjadi masalah' }
-                  ].map(({ key, label, desc }) => (
-                    <div key={key} className="flex items-start space-x-3 p-4 bg-slate-50/80 rounded-xl border border-slate-200/60">
-                      <div className="flex-1">
-                        <div className="font-medium text-slate-800 text-sm">{label}</div>
-                        <div className="text-xs text-slate-500 mt-1">{desc}</div>
-                      </div>
-                      <div className={`w-12 h-6 rounded-full transition-colors ${
-                        securityData.settings[key] ? 'bg-blue-500' : 'bg-slate-300'
-                      } relative`}>
-                        <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${
-                          securityData.settings[key] ? 'translate-x-7' : 'translate-x-1'
-                        }`} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )} */}
+          
         </div>
       </div>
     </div>
