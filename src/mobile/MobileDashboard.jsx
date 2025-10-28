@@ -3,51 +3,55 @@ import { Battery, MapPin, Activity, Clock, Menu, Bell, User, WifiOff, Wifi, LogO
 import { useHistory } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
 import { Capacitor } from "@capacitor/core";
-// ✅ AMBIL HOOK AUTH
-import { useAuth } from "../context/AuthContext"; 
+// ✅ AMBIL HOOK AUTH & SOCKET
+import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 
 export default function Dashboard() {
-  // ✅ State untuk data IoT (Ini sudah benar)
-  const [jarak, setJarak] = useState(null);
-  const [battery, setBattery] = useState(0);
-  const [aktivitas, setAktivitas] = useState("Menunggu...");
-  const [akselerasi, setAkselerasi] = useState({ x: 0, y: 0, z: 0 });
-  const [giroskop, setGiroskop] = useState({ x: 0, y: 0, z: 0 });
-  const [teganganBaterai, setTeganganBaterai] = useState(0);
-  const [kekuatanSinyal, setKekuatanSinyal] = useState(0);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   // ===================================
-  // ⬇️ AMBIL SEMUA DATA DARI CONTEXT ⬇️
+  // AMBIL DATA DARI CONTEXT
   // ===================================
-  
-  // AMBIL 'user', 'logout', DAN 'isLoggedIn' DARI CONTEXT
-  const { user, logout, isLoggedIn } = useAuth();
-  
-  // 🛑 STATE SIMULASI LAMA SUDAH DIHAPUS 🛑
+  const {
+    jarak,
+    battery,
+    aktivitas,
+    akselerasi,
+    giroskop,
+    teganganBaterai,
+    kekuatanSinyal,
+    lastUpdate,
+    wsConnected,
+    // Ambil juga fungsi fetch log jika perlu refresh manual
+    fetchActivityLog: fetchLogsFromContext
+  } = useSocket();
 
-  // State untuk dropdown (ini UI lokal, jadi tetap di sini)
-  const [isProfileOpen, setIsProfileOpen] = useState(false); 
-  
+  const { user, logout, isLoggedIn, token } = useAuth(); // Ambil token juga
+  console.log("token : ", token);
+  // ===================================
+  // STATE LOKAL (UI & GPS)
+  // ===================================
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [location, setLocation] = useState({
+    latitude: null,
+    longitude: null,
+    accuracy: null,
+  });
+
   const history = useHistory();
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
-  // ===================================
-  // ⬆️ PERBAIKAN SELESAI ⬆️
-  // ===================================
 
+  // ===================================
+  // KONFIGURASI & FUNGSI BANTU
+  // ===================================
+  // Ganti URL API jika perlu (sesuaikan dengan SocketContext)
+  const API_BASE_URL = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api"; 
 
-  // ✅ Konfigurasi API & WebSocket
-  const API_BASE_URL = "https://your-backend-api.com/api"; // 🔧 GANTI DENGAN URL API KAMU
-  const WS_URL = "wss://mollusklike-intactly-kennedi.ngrok-free.dev"; // Untuk tes di laptop
-  
   const goToLog = () => {
     history.push("/mobilelog");
   };
 
-  // ✅ Fungsi status (sudah benar)
   const getStatus = () => {
     if (jarak === null || jarak === -1) return "Menunggu Data";
     if (jarak < 30) return "Bahaya!";
@@ -70,29 +74,15 @@ export default function Dashboard() {
     return 'bg-red-500';
   };
 
-  // ✅ State GPS (sudah benar)
-  const [location, setLocation] = useState({
-    latitude: null,
-    longitude: null,
-    accuracy: null,
-  });
-
   // ===================================
-  // ⬇️ LOGIKA REDIRECT & DROPDOWN ⬇️
+  // LOGIKA AUTH & DROPDOWN (Sudah Benar)
   // ===================================
-
-  // ✅ useEffect untuk redirect jika 'isLoggedIn' DARI CONTEXT berubah
   useEffect(() => {
-    // Jika context bilang kita tidak login (false),
-    // redirect ke halaman login. Ini akan jalan setelah 'logout()' dipanggil.
     if (!isLoggedIn) {
-      // Pastikan path ini benar menuju halaman Login Anda
-      // (Misal: "/" atau "/mobilelogin")
-      history.push("/mobilelogin"); 
+      history.push("/mobilelogin");
     }
-  }, [isLoggedIn, history]); // Awasi 'isLoggedIn' dari context
+  }, [isLoggedIn, history]);
 
-  // Efek untuk menutup dropdown saat klik di luar (sudah benar)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -112,63 +102,12 @@ export default function Dashboard() {
   }, [isProfileOpen]);
 
   // ===================================
-  // ⬆️ PERBAIKAN SELESAI ⬆️
+  // 🛑 HAPUS useEffect WebSocket dari sini 🛑
   // ===================================
-
-
-  // ===================================
-  // 🔌 WEBSOCKET CONNECTION (Sudah Benar)
-  // ===================================
-  useEffect(() => {
-    let ws;
-    let reconnectTimeout;
-    const connectWebSocket = () => {
-      console.log(`🔌 Mencoba koneksi ke ${WS_URL}...`);
-      ws = new WebSocket(WS_URL);
-      ws.onopen = () => {
-        console.log("✅ WebSocket Connected");
-        setWsConnected(true);
-        setReconnectAttempt(0);
-      };
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log("📦 Data diterima dari WebSocket (Database):", data); 
-          if (data.jarak_cm !== undefined) setJarak(data.jarak_cm);
-          if (data.aktivitas !== undefined) setAktivitas(data.aktivitas);
-          if (data.persen_baterai !== undefined) setBattery(data.persen_baterai);
-          if (data.akselerasi !== undefined) setAkselerasi(data.akselerasi);
-          if (data.giroskop !== undefined) setGiroskop(data.giroskop);
-          if (data.tegangan_baterai !== undefined) setTeganganBaterai(data.tegangan_baterai);
-          if (data.kekuatan_sinyal !== undefined) setKekuatanSinyal(data.kekuatan_sinyal);
-          setLastUpdate(new Date());
-        } catch (err) {
-          console.error("❌ Error parsing WebSocket message:", err);
-        }
-      };
-      ws.onerror = (error) => console.error("❌ WebSocket Error:", error);
-      ws.onclose = () => {
-        console.log("❌ WebSocket Disconnected");
-        setWsConnected(false);
-        const timeout = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
-        console.log(`🔄 Reconnecting in ${timeout/1000}s...`);
-        reconnectTimeout = setTimeout(() => {
-          setReconnectAttempt(prev => prev + 1);
-        }, timeout);
-      };
-    };
-    connectWebSocket();
-    return () => {
-      clearTimeout(reconnectTimeout); 
-      if (ws) {
-        ws.onclose = null; 
-        ws.close();
-      }
-    };
-  }, [reconnectAttempt, WS_URL]); 
+  // Logika WebSocket SEPENUHNYA ada di SocketContext.js
 
   // ===================================
-  // 📍 GPS LOCATION TRACKER (Sudah Benar)
+  // 📍 GPS LOCATION TRACKER (Biarkan di sini)
   // ===================================
   useEffect(() => {
     const updateLocation = async () => {
@@ -182,7 +121,7 @@ export default function Dashboard() {
             (pos) => {
               setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
             },
-            (err) => console.error("Error (Web):", err),
+            (err) => console.error("Error getting location (Web):", err),
             { enableHighAccuracy: true }
           );
         }
@@ -191,94 +130,111 @@ export default function Dashboard() {
       }
     };
     updateLocation();
-    const intervalId = setInterval(updateLocation, 1000); 
+    const intervalId = setInterval(updateLocation, 5000); // Update GPS tiap 5 detik
     return () => {
       clearInterval(intervalId);
     };
-  }, []); 
+  }, []);
 
   // ===================================
-  // 🌐 REST API FUNCTIONS (Sudah Benar)
+  // 🌐 REST API FUNCTIONS (Lengkapi Implementasi)
   // ===================================
+
+  // Fungsi untuk refresh data sensor terbaru (Tombol Refresh)
   const fetchLatestData = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/sensor/latest`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) throw new Error('Failed to fetch data');
-      const data = await response.json();
-      console.log("📊 Data dari API:", data);
-      if (data.jarak_cm !== undefined) setJarak(data.jarak_cm); 
-      if (data.persen_baterai !== undefined) setBattery(data.persen_baterai);
-      if (data.aktivitas !== undefined) setAktivitas(data.aktivitas);
-      if (data.akselerasi !== undefined) setAkselerasi(data.akselerasi);
-      if (data.giroskop !== undefined) setGiroskop(data.giroskop);
-      if (data.tegangan_baterai !== undefined) setTeganganBaterai(data.tegangan_baterai);
-      if (data.kekuatan_sinyal !== undefined) setKekuatanSinyal(data.kekuatan_sinyal);
-    } catch (error) {
-      console.error("❌ Error fetching data:", error);
-    }
-  }, [API_BASE_URL]); 
-
-  const fetchActivityLog = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/sensor/logs?limit=10`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
-      if (!response.ok) throw new Error('Failed to fetch logs');
-      const logs = await response.json();
-      console.log("📜 Activity Logs:", logs);
-      return logs;
-    } catch (error) {
-      console.error("❌ Error fetching logs:", error);
-      return [];
-    }
-  }, [API_BASE_URL]); 
-
-  const sendLocationToBackend = useCallback(async (lat, lon) => {
-    try {
-      // Ambil id_perangkat dari localStorage
-      const id_perangkat = localStorage.getItem("id_perangkat");
-      if (!id_perangkat) {
-        console.warn("Tidak ada id_perangkat di localStorage untuk sendLocation");
+    if (!token) {
+        console.warn("Fetch Latest Data: Token belum siap.");
         return;
+    }
+    console.log("Fetching latest data...");
+    try {
+      // Gunakan endpoint /latest dari backend
+      const response = await fetch(`${API_BASE_URL}/data/latest`, {
+          method: 'GET',
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+          }
+      });
+
+      if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: `Gagal fetch data terbaru (${response.status})` }));
+          throw new Error(errorData.message || `Gagal fetch data terbaru (${response.status})`);
       }
 
-      const response = await fetch(`${API_BASE_URL}/location/update`, {
+      const data = await response.json();
+      console.log("📊 Data terbaru dari API:", data);
+      // Optional: Update state manual jika perlu (meski WebSocket sudah update)
+      // if (data.jarak_cm !== undefined) setJarak(data.jarak_cm); // Sebenarnya tidak perlu jika useSocket() dipakai
+      // ... (update state lain jika dibutuhkan)
+
+    } catch (error) {
+      console.error("❌ Error fetching latest data:", error);
+    }
+  }, [API_BASE_URL, token]); // Tambahkan token sebagai dependensi
+
+  // Fungsi untuk mengirim lokasi ke backend
+  const sendLocationToBackend = useCallback(async (lat, lon) => {
+    if (!token) {
+        console.warn("Send Location: Token belum siap.");
+        return;
+    }
+    // Ambil id_perangkat dari localStorage (disimpan saat login)
+    const id_perangkat = localStorage.getItem("id_perangkat");
+    if (!id_perangkat) {
+      console.warn("Tidak ada id_perangkat di localStorage untuk sendLocation");
+      return;
+    }
+
+    console.log(`Sending location for device ${id_perangkat}...`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/location/update`, { // Asumsi endpoint ini ada
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Authorization': `Bearer ${token}`, // Kirim token jika endpoint ini diproteksi
+            'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
-          id_perangkat: id_perangkat, // Gunakan id_perangkat dari localStorage
+          id_perangkat: id_perangkat,
           latitude: lat,
           longitude: lon,
-          accuracy: location.accuracy, 
+          accuracy: location.accuracy,
           timestamp: new Date().toISOString(),
         }),
       });
-      if (!response.ok) throw new Error('Failed to send location');
+      if (!response.ok) {
+           const errorData = await response.json().catch(() => ({ message: `Gagal kirim lokasi (${response.status})` }));
+          throw new Error(errorData.message || `Gagal kirim lokasi (${response.status})`);
+      }
       console.log("✅ Location sent to backend");
     } catch (error) {
       console.error("❌ Error sending location:", error);
     }
-  }, [API_BASE_URL, location.accuracy]); 
+    // Tambahkan token dan location.accuracy sebagai dependensi
+  }, [API_BASE_URL, token, location.accuracy]); 
 
   // ===================================
-  // 📱 AUTO SEND LOCATION (Sudah Benar)
+  // 📱 AUTO SEND LOCATION (Biarkan di sini)
   // ===================================
   useEffect(() => {
-    if (location.latitude && location.longitude) {
+    if (location.latitude && location.longitude && token) { // Pastikan token ada sebelum kirim
       sendLocationToBackend(location.latitude, location.longitude);
       const locationInterval = setInterval(() => {
         sendLocationToBackend(location.latitude, location.longitude);
-      }, 10000); 
+      }, 10000); // Kirim setiap 10 detik
       return () => clearInterval(locationInterval);
     }
-  }, [location.latitude, location.longitude, sendLocationToBackend]);
+  }, [location.latitude, location.longitude, sendLocationToBackend, token]); // Tambah token di dependensi
 
   // ===================================
-  // ⬇️ RENDER JSX (PERBAIKAN DROPDOWN) ⬇️
+  // RENDER JSX (Tidak ada perubahan)
   // ===================================
   return (
     <div className="min-h-screen bg-gray-50">
 
       {/* Header */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-200">
+        {/* ... (Header JSX tidak berubah) ... */}
         <div className="px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -323,10 +279,6 @@ export default function Dashboard() {
                 >
                   <div className="px-4 py-3">
                     <p className="text-sm text-gray-500">Login sebagai</p>
-                    
-                    {/* PERBAIKAN: Gunakan 'user.email' untuk Teks dan Title.
-                      'user' datang dari useAuth().
-                    */}
                     <p 
                       className="text-sm font-semibold text-gray-900 truncate" 
                       title={user ? user.email : 'Email Pengguna'}
@@ -351,241 +303,241 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <div className="px-4 py-6 space-y-4">
-
-        {/* Connection Status Alert */}
-        {!wsConnected && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-            <div className="flex items-center space-x-2">
-              <WifiOff className="w-5 h-5 text-yellow-600" />
-              <div>
-                <p className="text-sm font-semibold text-yellow-900">Koneksi Terputus</p>
-                <p className="text-xs text-yellow-700">Mencoba koneksi ulang...</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Status Card */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Status Perangkat</h2>
-              <p className="text-sm text-gray-500">Update real-time</p>
-            </div>
-            <span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor()}`}>
-              {getStatus()}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {/* Distance */}
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="flex items-center space-x-2 mb-2">
-                <MapPin className="w-5 h-5 text-blue-600" />
-                <span className="text-xs font-semibold text-blue-900">Jarak</span>
-              </div>
-              <div className="flex items-end space-x-1">
-                <span className="text-3xl font-black text-blue-900">
-                  {jarak !== null && jarak !== -1 ? jarak : "-"}
-                </span>
-                <span className="text-sm text-blue-700 mb-1">cm</span>
-              </div>
-              {jarak === -1 && (
-                <p className="text-xs text-blue-600 mt-1">Tidak terdeteksi</p>
-              )}
-              {jarak === null && (
-                <p className="text-xs text-blue-600 mt-1">Menunggu data...</p>
-              )}
-            </div>
-
-            {/* Battery */}
-            <div className="bg-emerald-50 rounded-xl p-4">
-              <div className="flex items-center space-x-2 mb-2">
-                <Battery className="w-5 h-5 text-emerald-600" />
-                <span className="text-xs font-semibold text-emerald-900">Baterai</span>
-              </div>
-              <div className="flex items-end space-x-1">
-                <span className="text-3xl font-black text-emerald-900">{battery}</span>
-                <span className="text-sm text-emerald-700 mb-1">%</span>
-              </div>
-              <div className="mt-2 h-2 bg-emerald-200 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full ${getBatteryColor(battery)} transition-all duration-500`}
-                  style={{ width: `${battery}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* GPS Tracking */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-gray-900">Lokasi Real-Time</h2>
-                <p className="text-xs text-gray-500">GPS Tracking</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 bg-purple-100 px-2 py-1 rounded-full">
-              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-purple-700 font-semibold">Live</span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 text-center">
-            {location.latitude && location.longitude ? (
-              <div className="space-y-3">
-                <div className="text-sm font-bold text-gray-900">📍 Koordinat</div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="text-sm font-mono text-gray-900">
-                    {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Akurasi: ±{Math.round(location.accuracy)} m
+          {/* ... (Semua kartu dan tombol di Main Content tidak berubah) ... */}
+           {/* Connection Status Alert */}
+            {!wsConnected && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                <div className="flex items-center space-x-2">
+                  <WifiOff className="w-5 h-5 text-yellow-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-yellow-900">Koneksi Terputus</p>
+                    <p className="text-xs text-yellow-700">Mencoba koneksi ulang...</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => history.push("/map")}
-                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm active:scale-98 transition"
+              </div>
+            )}
+
+            {/* Status Card */}
+            <div className="bg-white rounded-2xl p-5 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Status Perangkat</h2>
+                  <p className="text-sm text-gray-500">Update real-time</p>
+                </div>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor()}`}>
+                  {getStatus()}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Distance */}
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                    <span className="text-xs font-semibold text-blue-900">Jarak</span>
+                  </div>
+                  <div className="flex items-end space-x-1">
+                    <span className="text-3xl font-black text-blue-900">
+                      {jarak !== null && jarak !== -1 ? jarak : "-"}
+                    </span>
+                    <span className="text-sm text-blue-700 mb-1">cm</span>
+                  </div>
+                  {jarak === -1 && (
+                    <p className="text-xs text-blue-600 mt-1">Tidak terdeteksi</p>
+                  )}
+                  {jarak === null && (
+                    <p className="text-xs text-blue-600 mt-1">Menunggu data...</p>
+                  )}
+                </div>
+
+                {/* Battery */}
+                <div className="bg-emerald-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Battery className="w-5 h-5 text-emerald-600" />
+                    <span className="text-xs font-semibold text-emerald-900">Baterai</span>
+                  </div>
+                  <div className="flex items-end space-x-1">
+                    <span className="text-3xl font-black text-emerald-900">{battery}</span>
+                    <span className="text-sm text-emerald-700 mb-1">%</span>
+                  </div>
+                  <div className="mt-2 h-2 bg-emerald-200 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full ${getBatteryColor(battery)} transition-all duration-500`}
+                      style={{ width: `${battery}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GPS Tracking */}
+            <div className="bg-white rounded-2xl p-5 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">Lokasi Real-Time</h2>
+                    <p className="text-xs text-gray-500">GPS Tracking</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1 bg-purple-100 px-2 py-1 rounded-full">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-purple-700 font-semibold">Live</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 text-center">
+                {location.latitude && location.longitude ? (
+                  <div className="space-y-3">
+                    <div className="text-sm font-bold text-gray-900">📍 Koordinat</div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-sm font-mono text-gray-900">
+                        {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Akurasi: ±{location.accuracy ? Math.round(location.accuracy) : '?'} m
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => history.push("/map")}
+                      className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm active:scale-98 transition"
+                    >
+                      Buka Maps Tracker
+                    </button>
+                  </div>
+                ) : (
+                  <div className="py-8">
+                    <div className="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-gray-400 animate-bounce" />
+                    </div>
+                    <p className="text-sm text-gray-600">Mengambil lokasi...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Activity & Sensor Data */}
+            <div className="bg-white rounded-2xl p-5 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">Aktivitas & Sensor</h2>
+                    <p className="text-xs text-gray-500">Data real-time</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {/* Aktivitas */}
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-blue-900">Aktivitas</span>
+                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                      {aktivitas}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Akselerasi */}
+                <div className="bg-purple-50 rounded-xl p-4">
+                  <div className="text-sm font-semibold text-purple-900 mb-2">Akselerasi</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">X</div>
+                      <div className="font-bold text-purple-900">{akselerasi ? akselerasi.x.toFixed(2) : '-'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">Y</div>
+                      <div className="font-bold text-purple-900">{akselerasi ? akselerasi.y.toFixed(2) : '-'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">Z</div>
+                      <div className="font-bold text-purple-900">{akselerasi ? akselerasi.z.toFixed(2) : '-'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Giroskop */}
+                <div className="bg-orange-50 rounded-xl p-4">
+                  <div className="text-sm font-semibold text-orange-900 mb-2">Giroskop</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">X</div>
+                      <div className="font-bold text-orange-900">{giroskop ? giroskop.x.toFixed(3) : '-'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">Y</div>
+                      <div className="font-bold text-orange-900">{giroskop ? giroskop.y.toFixed(3) : '-'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <div className="text-gray-500">Z</div>
+                      <div className="font-bold text-orange-900">{giroskop ? giroskop.z.toFixed(3) : '-'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Tambahan */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-xs text-gray-500">Tegangan Baterai</div>
+                    <div className="text-sm font-bold text-gray-900">{teganganBaterai ? teganganBaterai.toFixed(2) + 'V' : '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-xs text-gray-500">Sinyal</div>
+                    <div className="text-sm font-bold text-gray-900">{kekuatanSinyal ?? '-'} dBm</div>
+                  </div>
+                </div>
+
+                {lastUpdate && (
+                  <div className="text-xs text-center text-gray-500 pt-2">
+                    Update terakhir: {lastUpdate.toLocaleTimeString('id-ID')}
+                  </div>
+                )}
+
+                <button 
+                  onClick={goToLog}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm active:scale-98 transition"
                 >
-                  Buka Maps Tracker
+                  Lihat Log Detail
                 </button>
               </div>
-            ) : (
-              <div className="py-8">
-                <div className="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">
-                  <MapPin className="w-6 h-6 text-gray-400 animate-bounce" />
+            </div>
+
+            {/* Quick Actions */}
+            {/* <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={fetchLatestData} 
+                className="bg-white border border-gray-200 rounded-xl p-4 text-center active:scale-95 transition"
+              >
+                <div className="w-12 h-12 bg-emerald-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+                  <span className="text-2xl">🔄</span>
                 </div>
-                <p className="text-sm text-gray-600">Mengambil lokasi...</p>
-              </div>
-            )}
-          </div>
-        </div>
+                <div className="text-sm font-bold text-gray-900">Refresh Data</div>
+              </button>
 
-        {/* Activity & Sensor Data */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Activity className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-gray-900">Aktivitas & Sensor</h2>
-                <p className="text-xs text-gray-500">Data real-time</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {/* Aktivitas */}
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-blue-900">Aktivitas</span>
-                <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                  {aktivitas}
-                </span>
-              </div>
-            </div>
-
-            {/* Akselerasi */}
-            <div className="bg-purple-50 rounded-xl p-4">
-              <div className="text-sm font-semibold text-purple-900 mb-2">Akselerasi</div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">X</div>
-                  <div className="font-bold text-purple-900">{akselerasi.x.toFixed(2)}</div>
+              <button className="bg-white border border-gray-200 rounded-xl p-4 text-center active:scale-95 transition">
+                <div className="w-12 h-12 bg-blue-100 rounded-full mx-auto mb-2 flex items-center justify-center">
+                  <span className="text-2xl">⚙️</span>
                 </div>
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">Y</div>
-                  <div className="font-bold text-purple-900">{akselerasi.y.toFixed(2)}</div>
+                <div className="text-sm font-bold text-gray-900">Pengaturan</div>
+              </button>
+            </div> */}
+
+            {/* Footer Info */}
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <span>{wsConnected ? 'WebSocket Aktif' : 'WebSocket Terputus'}</span>
                 </div>
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">Z</div>
-                  <div className="font-bold text-purple-900">{akselerasi.z.toFixed(2)}</div>
-                </div>
+                <span className="text-gray-500">SmartCane v2.1</span>
               </div>
             </div>
-
-            {/* Giroskop */}
-            <div className="bg-orange-50 rounded-xl p-4">
-              <div className="text-sm font-semibold text-orange-900 mb-2">Giroskop</div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">X</div>
-                  <div className="font-bold text-orange-900">{giroskop.x.toFixed(3)}</div>
-                </div>
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">Y</div>
-                  <div className="font-bold text-orange-900">{giroskop.y.toFixed(3)}</div>
-                </div>
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <div className="text-gray-500">Z</div>
-                  <div className="font-bold text-orange-900">{giroskop.z.toFixed(3)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Info Tambahan */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500">Tegangan Baterai</div>
-                <div className="text-sm font-bold text-gray-900">{teganganBaterai.toFixed(2)}V</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500">Sinyal</div>
-                <div className="text-sm font-bold text-gray-900">{kekuatanSinyal}</div>
-              </div>
-            </div>
-
-            {lastUpdate && (
-              <div className="text-xs text-center text-gray-500 pt-2">
-                Update terakhir: {lastUpdate.toLocaleTimeString('id-ID')}
-              </div>
-            )}
-
-            <button 
-              onClick={goToLog}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm active:scale-98 transition"
-            >
-              Lihat Log Detail
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <button 
-            onClick={fetchLatestData} 
-            className="bg-white border border-gray-200 rounded-xl p-4 text-center active:scale-95 transition"
-          >
-            <div className="w-12 h-12 bg-emerald-100 rounded-full mx-auto mb-2 flex items-center justify-center">
-              <span className="text-2xl">🔄</span>
-            </div>
-            <div className="text-sm font-bold text-gray-900">Refresh Data</div>
-          </button>
-
-          <button className="bg-white border border-gray-200 rounded-xl p-4 text-center active:scale-95 transition">
-            <div className="w-12 h-12 bg-blue-100 rounded-full mx-auto mb-2 flex items-center justify-center">
-              <span className="text-2xl">⚙️</span>
-            </div>
-            <div className="text-sm font-bold text-gray-900">Pengaturan</div>
-          </button>
-        </div>
-
-        {/* Footer Info */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span>{wsConnected ? 'WebSocket Aktif' : 'WebSocket Terputus'}</span>
-            </div>
-            <span className="text-gray-500">SmartCane v2.1</span>
-          </div>
-        </div>
       </div>
     </div>
   );

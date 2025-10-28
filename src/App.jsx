@@ -1,15 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
-// 🛑 HAPUS 'Preferences' dan 'Redirect'
-// import { Preferences } from "@capacitor/preferences"; 
-// import { Redirect } from "react-router-dom";
-
 import { AuthProvider } from './context/AuthContext';
-import ProtectedRoute from './ProtectedRoute'; // ✅ IMPORT ProtectedRoute
-import RootRedirect from './RootRedirect';   // ✅ IMPORT RootRedirect
-
-// Import semua halaman Anda
-import Dashboard from "./dasboard"; // Nanti ganti nama file jadi dashboard.js
+import ProtectedRoute from './ProtectedRoute'; 
+import RootRedirect from './RootRedirect'; 
+import { SocketProvider, useSocket } from "./context/SocketContext";
+import Dashboard from "./dasboard"; 
 import DetailSecurityPage from "./log";
 import MapTracker from "./MapTracker";
 import Test from "./test";
@@ -53,49 +48,51 @@ function App() {
 
   return (
     <AuthProvider>
-      <Router>
-        <BackHandler />
-        <Switch>
-          {/* Halaman Awal (Root) */}
-          <Route exact path="/">
-            {/* Gunakan komponen RootRedirect baru */}
-            <RootRedirect isMobile={isMobile} />
-          </Route>
+      <SocketProvider>
+        <Router>
+          <BackHandler />
+          <Switch>
+            {/* Halaman Awal (Root) */}
+            <Route exact path="/">
+              {/* Gunakan komponen RootRedirect baru */}
+              <RootRedirect isMobile={isMobile} />
+            </Route>
 
-          {/* --- Rute Publik (Bisa diakses tanpa login) --- */}
-          
-          {/* 📱 Mobile Publik */}
-          <Route path="/onboarding-mobile" component={OnboardingScreen} />
-          <Route path="/mobilelogin" component={MobileLogin} />
-          <Route path="/mobileregister" component={MobileRegister} />
+            {/* --- Rute Publik (Bisa diakses tanpa login) --- */}
+            
+            {/* 📱 Mobile Publik */}
+            <Route path="/onboarding-mobile" component={OnboardingScreen} />
+            <Route path="/mobilelogin" component={MobileLogin} />
+            <Route path="/mobileregister" component={MobileRegister} />
 
-          {/* 💻 Desktop Publik */}
-          <Route path="/login" component={Login} />
-          <Route path="/register" component={Register} />
-          <Route path="/user/login" component={UserLogin} />
-          <Route path="/user/register" component={RegisterUser} />
-          <Route path="/device/login" component={DeviceLogin} />
-          <Route path="/landing" component={LandingPage} />
+            {/* 💻 Desktop Publik */}
+            <Route path="/login" component={Login} />
+            <Route path="/register" component={Register} />
+            <Route path="/user/login" component={UserLogin} />
+            <Route path="/user/register" component={RegisterUser} />
+            <Route path="/device/login" component={DeviceLogin} />
+            <Route path="/landing" component={LandingPage} />
 
-          {/* --- Rute Terproteksi (Harus login) --- */}
-          {/* Gunakan <ProtectedRoute> */}
+            {/* --- Rute Terproteksi (Harus login) --- */}
+            {/* Gunakan <ProtectedRoute> */}
 
-          {/* 📱 Mobile Terproteksi */}
-          <ProtectedRoute path="/mobiledashboard" component={MobileDashboard} />
-          <ProtectedRoute path="/mobilelog" component={MobileLog} />
-          <ProtectedRoute path="/mobileadmin" component={MobileAdmin} />
-          <ProtectedRoute path="/mobilealert" component={MobileAlert} />
-          <ProtectedRoute path="/coba" component={Coba} />
+            {/* 📱 Mobile Terproteksi */}
+            <ProtectedRoute path="/mobiledashboard" component={MobileDashboard} />
+            <ProtectedRoute path="/mobilelog" component={MobileLog} />
+            <ProtectedRoute path="/mobileadmin" component={MobileAdmin} />
+            <ProtectedRoute path="/mobilealert" component={MobileAlert} />
+            <ProtectedRoute path="/coba" component={Coba} />
 
-          {/* 💻 Desktop Terproteksi */}
-          {/* (PERBAIKAN: ganti 'Dasboard' jadi 'dashboard') */}
-          <ProtectedRoute path="/dashboard" component={Dashboard} /> 
-          <ProtectedRoute path="/log" component={DetailSecurityPage} />
-          <ProtectedRoute path="/map" component={MapTracker}/>
-          <ProtectedRoute path="/test" component={Test}/>
-          
-        </Switch>
-      </Router>
+            {/* 💻 Desktop Terproteksi */}
+            {/* (PERBAIKAN: ganti 'Dasboard' jadi 'dashboard') */}
+            <ProtectedRoute path="/dashboard" component={Dashboard} /> 
+            <ProtectedRoute path="/log" component={DetailSecurityPage} />
+            <ProtectedRoute path="/map" component={MapTracker}/>
+            <ProtectedRoute path="/test" component={Test}/>
+            
+          </Switch>
+        </Router>
+      </SocketProvider>
     </AuthProvider>
   );
 }
