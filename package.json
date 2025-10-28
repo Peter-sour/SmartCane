@@ -20,6 +20,7 @@
     "axios": "^1.12.2",
     "daisyui": "^5.3.9",
     "ionicons": "^8.0.13",
+    "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.544.0",
     "maplibre-gl": "^5.7.3",

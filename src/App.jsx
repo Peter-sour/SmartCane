@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Switch, Route, Redirect } from "react-router-dom";
-import { Preferences } from "@capacitor/preferences"; 
+import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
+// 🛑 HAPUS 'Preferences' dan 'Redirect'
+// import { Preferences } from "@capacitor/preferences"; 
+// import { Redirect } from "react-router-dom";
 
-import Dasboard from "./dasboard";
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './ProtectedRoute'; // ✅ IMPORT ProtectedRoute
+import RootRedirect from './RootRedirect';   // ✅ IMPORT RootRedirect
+
+// Import semua halaman Anda
+import Dashboard from "./dasboard"; // Nanti ganti nama file jadi dashboard.js
 import DetailSecurityPage from "./log";
 import MapTracker from "./MapTracker";
 import Test from "./test";
@@ -16,17 +23,20 @@ import OnboardingScreen from "./pages/OnboardingScreen";
 import MobileLogin from "./mobile/MobileLogin";
 import MobileRegister from "./mobile/MobileRegister";
 import BackHandler from "./BackHandler";  
-import MobileDasboard from "./mobile/MobileDashboard";
+import MobileDashboard from "./mobile/MobileDashboard";
 import MobileLog from "./mobile/MobileLog";
 import MobileAdmin from "./mobile/MobileAdmin";
 import MobileAlert from "./mobile/MobileAlert";
+import Coba from "./mobile/coba";
 
 function App() {
   const [isMobile, setIsMobile] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [checkingLogin, setCheckingLogin] = useState(true);
+  
+  // 🛑 HAPUS STATE AUTH LAMA 🛑
+  // const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // const [checkingLogin, setCheckingLogin] = useState(true);
 
-  // 🔍 Deteksi device (mobile vs desktop)
+  // 🔍 Deteksi device (Ini sudah benar, biarkan)
   useEffect(() => {
     const checkDevice = () => setIsMobile(window.innerWidth <= 768);
     checkDevice();
@@ -34,56 +44,59 @@ function App() {
     return () => window.removeEventListener("resize", checkDevice);
   }, []);
 
-  // 🧠 Cek status login dari Preferences (Capacitor)
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      const { value } = await Preferences.get({ key: "isLoggedIn" });
-      setIsLoggedIn(value === "true");
-      setCheckingLogin(false);
-    };
-    checkLoginStatus();
-  }, []);
+  // 🛑 HAPUS LOGIKA CEK LOGIN LAMA 🛑
+  // useEffect(() => { ... checkLoginStatus ... }, []);
+  // (AuthProvider sudah melakukan ini)
 
-  if (checkingLogin) {
-    return <div>Loading...</div>; // ⏳ Tunggu status login dicek dulu
-  }
+  // 🛑 HAPUS 'if (checkingLogin)' 🛑
+  // (AuthProvider sudah punya 'isLoading' screen sendiri)
 
   return (
-    <Router>
-      <BackHandler />
+    <AuthProvider>
+      <Router>
+        <BackHandler />
+        <Switch>
+          {/* Halaman Awal (Root) */}
+          <Route exact path="/">
+            {/* Gunakan komponen RootRedirect baru */}
+            <RootRedirect isMobile={isMobile} />
+          </Route>
 
-      <Switch>
-        {/* Halaman awal otomatis menyesuaikan login & device */}
-        <Route exact path="/">
-          {isLoggedIn ? (
-            <Redirect to={isMobile ? "/Dasboard" : "/Dasboard"} /> // Bisa kamu ubah kalau mobile mau ke lain
-          ) : (
-            isMobile ? <Redirect to="/onboarding-mobile" /> : <Redirect to="/login" />
-          )}
-        </Route>
+          {/* --- Rute Publik (Bisa diakses tanpa login) --- */}
+          
+          {/* 📱 Mobile Publik */}
+          <Route path="/onboarding-mobile" component={OnboardingScreen} />
+          <Route path="/mobilelogin" component={MobileLogin} />
+          <Route path="/mobileregister" component={MobileRegister} />
 
-        {/* 📱 Versi Mobile */}
-        <Route path="/onboarding-mobile" component={OnboardingScreen} />
-        <Route path="/mobilelogin" component={MobileLogin} />
-        <Route path="/mobileregister" component={MobileRegister} />
-        <Route path="/mobiledashboard" component={MobileDasboard} />
-        <Route path="/mobilelog" component={MobileLog} />
-        <Route path="/mobileadmin" component={MobileAdmin} />
-        <Route path="/mobilealert" component ={MobileAlert} />
+          {/* 💻 Desktop Publik */}
+          <Route path="/login" component={Login} />
+          <Route path="/register" component={Register} />
+          <Route path="/user/login" component={UserLogin} />
+          <Route path="/user/register" component={RegisterUser} />
+          <Route path="/device/login" component={DeviceLogin} />
+          <Route path="/landing" component={LandingPage} />
 
-        {/* 💻 Versi Desktop */}
-        <Route path="/Dasboard" component={Dasboard} />
-        <Route path="/log" component={DetailSecurityPage} />
-        <Route path="/map" component={MapTracker}/>
-        <Route path="/test" component={Test}/>
-        <Route path="/login" component={Login} />
-        <Route path="/register" component={Register} />
-        <Route path="/user/login" component={UserLogin} />
-        <Route path="/user/register" component={RegisterUser} />
-        <Route path="/device/login" component={DeviceLogin} />
-        <Route path="/landing" component={LandingPage} />
-      </Switch>
-    </Router>
+          {/* --- Rute Terproteksi (Harus login) --- */}
+          {/* Gunakan <ProtectedRoute> */}
+
+          {/* 📱 Mobile Terproteksi */}
+          <ProtectedRoute path="/mobiledashboard" component={MobileDashboard} />
+          <ProtectedRoute path="/mobilelog" component={MobileLog} />
+          <ProtectedRoute path="/mobileadmin" component={MobileAdmin} />
+          <ProtectedRoute path="/mobilealert" component={MobileAlert} />
+          <ProtectedRoute path="/coba" component={Coba} />
+
+          {/* 💻 Desktop Terproteksi */}
+          {/* (PERBAIKAN: ganti 'Dasboard' jadi 'dashboard') */}
+          <ProtectedRoute path="/dashboard" component={Dashboard} /> 
+          <ProtectedRoute path="/log" component={DetailSecurityPage} />
+          <ProtectedRoute path="/map" component={MapTracker}/>
+          <ProtectedRoute path="/test" component={Test}/>
+          
+        </Switch>
+      </Router>
+    </AuthProvider>
   );
 }
 

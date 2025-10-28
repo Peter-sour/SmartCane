@@ -1,13 +1,13 @@
+// PERBAIKAN: Impor 'useCallback' dan 'useRef'
 import React, { useEffect, useState, useCallback, useRef } from "react";
+// PERBAIKAN: Impor 'LogOut' dari lucide-react
 import { Battery, MapPin, Activity, Clock, Menu, Bell, User, WifiOff, Wifi, LogOut } from 'lucide-react';
 import { useHistory } from "react-router-dom";
 import { Geolocation } from "@capacitor/geolocation";
 import { Capacitor } from "@capacitor/core";
-// ✅ AMBIL HOOK AUTH
-import { useAuth } from "../context/AuthContext"; 
 
 export default function Dashboard() {
-  // ✅ State untuk data IoT (Ini sudah benar)
+  // ✅ State untuk semua data dari WebSocket/API
   const [jarak, setJarak] = useState(null);
   const [battery, setBattery] = useState(0);
   const [aktivitas, setAktivitas] = useState("Menunggu...");
@@ -18,36 +18,34 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
-
-  // ===================================
-  // ⬇️ AMBIL SEMUA DATA DARI CONTEXT ⬇️
-  // ===================================
   
-  // AMBIL 'user', 'logout', DAN 'isLoggedIn' DARI CONTEXT
-  const { user, logout, isLoggedIn } = useAuth();
-  
-  // 🛑 STATE SIMULASI LAMA SUDAH DIHAPUS 🛑
-
-  // State untuk dropdown (ini UI lokal, jadi tetap di sini)
-  const [isProfileOpen, setIsProfileOpen] = useState(false); 
+  // ===================================
+  // ⬇️ FITUR BARU: State untuk Profil & Auth (Simulasi) ⬇️
+  // ===================================
+  // Di aplikasi nyata, 'isLoggedIn' dan 'username' akan datang dari Context
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // Asumsi user sudah login
+  const [username, setUsername] = useState("pengguna@smartcane.com"); // Contoh username
+  const [isProfileOpen, setIsProfileOpen] = useState(false); // State untuk buka/tutup dropdown
   
   const history = useHistory();
+  
+  // Ref untuk mendeteksi klik di luar dropdown
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
   // ===================================
-  // ⬆️ PERBAIKAN SELESAI ⬆️
+  // ⬆️ FITUR BARU SELESAI ⬆️
   // ===================================
 
 
   // ✅ Konfigurasi API & WebSocket
   const API_BASE_URL = "https://your-backend-api.com/api"; // 🔧 GANTI DENGAN URL API KAMU
-  const WS_URL = "wss://mollusklike-intactly-kennedi.ngrok-free.dev"; // Untuk tes di laptop
+  const WS_URL = "ws://localhost:5000"; // Untuk tes di laptop
   
   const goToLog = () => {
     history.push("/mobilelog");
   };
 
-  // ✅ Fungsi status (sudah benar)
+  // ✅ Fungsi untuk menentukan status berdasarkan jarak dan aktivitas
   const getStatus = () => {
     if (jarak === null || jarak === -1) return "Menunggu Data";
     if (jarak < 30) return "Bahaya!";
@@ -70,7 +68,7 @@ export default function Dashboard() {
     return 'bg-red-500';
   };
 
-  // ✅ State GPS (sudah benar)
+  // ✅ State untuk GPS Location
   const [location, setLocation] = useState({
     latitude: null,
     longitude: null,
@@ -78,23 +76,27 @@ export default function Dashboard() {
   });
 
   // ===================================
-  // ⬇️ LOGIKA REDIRECT & DROPDOWN ⬇️
+  // ⬇️ FITUR BARU: Logika Auth & Dropdown ⬇️
   // ===================================
 
-  // ✅ useEffect untuk redirect jika 'isLoggedIn' DARI CONTEXT berubah
-  useEffect(() => {
-    // Jika context bilang kita tidak login (false),
-    // redirect ke halaman login. Ini akan jalan setelah 'logout()' dipanggil.
-    if (!isLoggedIn) {
-      // Pastikan path ini benar menuju halaman Login Anda
-      // (Misal: "/" atau "/mobilelogin")
-      history.push("/mobilelogin"); 
-    }
-  }, [isLoggedIn, history]); // Awasi 'isLoggedIn' dari context
+  // Fungsi untuk Logout
+  const handleLogout = () => {
+    setIsLoggedIn(false); // Set 'isLoggedIn' ke false
+    setIsProfileOpen(false); // Tutup dropdown
+    // Di aplikasi nyata, Anda akan membersihkan token, panggil context, dll.
+  };
 
-  // Efek untuk menutup dropdown saat klik di luar (sudah benar)
+  // Efek untuk redirect ke /login jika sudah tidak login
+  useEffect(() => {
+    if (!isLoggedIn) {
+      history.push("/login"); // Asumsi halaman login ada di '/login'
+    }
+  }, [isLoggedIn, history]);
+
+  // Efek untuk menutup dropdown saat klik di luar
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Cek apakah klik BUKAN di dalam menu DAN BUKAN di tombol profil
       if (
         isProfileOpen &&
         profileMenuRef.current &&
@@ -105,21 +107,25 @@ export default function Dashboard() {
         setIsProfileOpen(false);
       }
     };
+    
+    // Tambahkan event listener
     document.addEventListener('mousedown', handleClickOutside);
+    // Bersihkan saat unmount
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isProfileOpen]);
+  }, [isProfileOpen]); // Hanya jalankan jika isProfileOpen berubah
 
   // ===================================
-  // ⬆️ PERBAIKAN SELESAI ⬆️
+  // ⬆️ FITUR BARU SELESAI ⬆️
   // ===================================
 
 
   // ===================================
-  // 🔌 WEBSOCKET CONNECTION (Sudah Benar)
+  // 🔌 WEBSOCKET CONNECTION (useEffect Terpisah)
   // ===================================
   useEffect(() => {
+    // ... (Logika WebSocket Anda sudah benar, tidak perlu diubah) ...
     let ws;
     let reconnectTimeout;
     const connectWebSocket = () => {
@@ -168,9 +174,10 @@ export default function Dashboard() {
   }, [reconnectAttempt, WS_URL]); 
 
   // ===================================
-  // 📍 GPS LOCATION TRACKER (Sudah Benar)
+  // 📍 GPS LOCATION TRACKER (useEffect Terpisah)
   // ===================================
   useEffect(() => {
+    // ... (Logika GPS Anda sudah benar, tidak perlu diubah) ...
     const updateLocation = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
@@ -198,9 +205,10 @@ export default function Dashboard() {
   }, []); 
 
   // ===================================
-  // 🌐 REST API FUNCTIONS (Sudah Benar)
+  // 🌐 REST API FUNCTIONS
   // ===================================
   const fetchLatestData = useCallback(async () => {
+    // ... (Logika fetchLatestData Anda sudah benar, tidak perlu diubah) ...
     try {
       const response = await fetch(`${API_BASE_URL}/sensor/latest`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
       if (!response.ok) throw new Error('Failed to fetch data');
@@ -219,6 +227,7 @@ export default function Dashboard() {
   }, [API_BASE_URL]); 
 
   const fetchActivityLog = useCallback(async () => {
+    // ... (Logika fetchActivityLog Anda sudah benar, tidak perlu diubah) ...
     try {
       const response = await fetch(`${API_BASE_URL}/sensor/logs?limit=10`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
       if (!response.ok) throw new Error('Failed to fetch logs');
@@ -232,19 +241,13 @@ export default function Dashboard() {
   }, [API_BASE_URL]); 
 
   const sendLocationToBackend = useCallback(async (lat, lon) => {
+    // ... (Logika sendLocationToBackend Anda sudah benar, tidak perlu diubah) ...
     try {
-      // Ambil id_perangkat dari localStorage
-      const id_perangkat = localStorage.getItem("id_perangkat");
-      if (!id_perangkat) {
-        console.warn("Tidak ada id_perangkat di localStorage untuk sendLocation");
-        return;
-      }
-
       const response = await fetch(`${API_BASE_URL}/location/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id_perangkat: id_perangkat, // Gunakan id_perangkat dari localStorage
+          id_perangkat: 'tongkat-001',
           latitude: lat,
           longitude: lon,
           accuracy: location.accuracy, 
@@ -259,7 +262,7 @@ export default function Dashboard() {
   }, [API_BASE_URL, location.accuracy]); 
 
   // ===================================
-  // 📱 AUTO SEND LOCATION (Sudah Benar)
+  // 📱 AUTO SEND LOCATION (useEffect)
   // ===================================
   useEffect(() => {
     if (location.latitude && location.longitude) {
@@ -272,7 +275,7 @@ export default function Dashboard() {
   }, [location.latitude, location.longitude, sendLocationToBackend]);
 
   // ===================================
-  // ⬇️ RENDER JSX (PERBAIKAN DROPDOWN) ⬇️
+  // ⬇️ RENDER JSX (DENGAN HEADER BARU) ⬇️
   // ===================================
   return (
     <div className="min-h-screen bg-gray-50">
@@ -293,6 +296,7 @@ export default function Dashboard() {
             </div>
 
             {/* Right Actions */}
+            {/* PERBAIKAN: Tambahkan 'relative' di sini agar dropdown pas */}
             <div className="flex items-center space-x-2 relative">
               {/* WebSocket Status Indicator */}
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${wsConnected ? 'bg-emerald-100' : 'bg-red-100'}`}>
@@ -306,37 +310,30 @@ export default function Dashboard() {
                 <Bell className="w-5 h-5 text-gray-600" />
               </button>
               
-              {/* Tombol User (Profil) */}
+              {/* PERBAIKAN: Tombol User (Profil) */}
               <button 
-                ref={profileButtonRef} 
-                onClick={() => setIsProfileOpen(prev => !prev)} 
+                ref={profileButtonRef} // Tambahkan ref
+                onClick={() => setIsProfileOpen(prev => !prev)} // Toggle dropdown
                 className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"
               >
                 <User className="w-5 h-5 text-gray-600" />
               </button>
 
-              {/* Dropdown Menu Profil */}
+              {/* PERBAIKAN: Dropdown Menu Profil */}
               {isProfileOpen && (
                 <div 
-                  ref={profileMenuRef} 
+                  ref={profileMenuRef} // Tambahkan ref
                   className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden"
                 >
                   <div className="px-4 py-3">
                     <p className="text-sm text-gray-500">Login sebagai</p>
-                    
-                    {/* PERBAIKAN: Gunakan 'user.email' untuk Teks dan Title.
-                      'user' datang dari useAuth().
-                    */}
-                    <p 
-                      className="text-sm font-semibold text-gray-900 truncate" 
-                      title={user ? user.email : 'Email Pengguna'}
-                    >
-                      {user ? user.email : "Memuat..."}
+                    <p className="text-sm font-semibold text-gray-900 truncate" title={username}>
+                      {username}
                     </p>
                   </div>
                   <hr className="border-gray-100" />
                   <button 
-                    onClick={logout} // Panggil 'logout' dari context
+                    onClick={handleLogout}
                     className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
                   >
                     <LogOut className="w-4 h-4" />
@@ -351,6 +348,8 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <div className="px-4 py-6 space-y-4">
+
+        {/* ... (Sisa JSX Anda sudah benar, tidak perlu diubah) ... */}
 
         {/* Connection Status Alert */}
         {!wsConnected && (

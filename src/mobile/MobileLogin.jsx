@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Link, useHistory } from "react-router-dom";
 import { Preferences } from "@capacitor/preferences";
 import { Activity, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const nav = useHistory();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -17,7 +19,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://iot-backend-production-3ee9.up.railway.app/api/auth/login", {
+      const res = await fetch("https://mollusklike-intactly-kennedi.ngrok-free.dev/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -29,11 +31,12 @@ export default function Login() {
         throw new Error(data.message || "Login gagal");
       }
 
-      localStorage.setItem("token", data.token);
-      console.log("token",data.token);
-      localStorage.setItem("id_perangkat", data.id_perangkat);
-      await Preferences.set({ key: "isLoggedIn", value: "true" });
-      nav.push("/mobiledasboard");
+      // localStorage.setItem("token", data.token);
+      // console.log("token",data.token);
+      // localStorage.setItem("id_perangkat", data.id_perangkat);
+      // await Preferences.set({ key: "isLoggedIn", value: "true" });
+      await login(data.token, data);
+      nav.push("/mobiledashboard");
     } catch (error) {
       setErr(error.message);
     } finally {
