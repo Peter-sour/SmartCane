@@ -22,6 +22,7 @@ import MobileDashboard from "./mobile/MobileDashboard";
 import MobileLog from "./mobile/MobileLog";
 import MobileAdmin from "./mobile/MobileAdmin";
 import MobileAlert from "./mobile/MobileAlert";
+import MobileTimeline from "./mobile/MobileTimeline";
 import Coba from "./mobile/coba";
 
 function App() {
@@ -72,6 +73,7 @@ function App() {
             <Route path="/user/register" component={RegisterUser} />
             <Route path="/device/login" component={DeviceLogin} />
             <Route path="/landing" component={LandingPage} />
+            <Route path="/mobiletimeline" component={MobileTimeline} />
 
             {/* --- Rute Terproteksi (Harus login) --- */}
             {/* Gunakan <ProtectedRoute> */}
@@ -89,6 +91,7 @@ function App() {
             <ProtectedRoute path="/log" component={DetailSecurityPage} />
             <ProtectedRoute path="/map" component={MapTracker}/>
             <ProtectedRoute path="/test" component={Test}/>
+
             
           </Switch>
         </Router>

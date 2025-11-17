@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, RotateCcw, MapPin, Navigation, Zap } from "lucide-react";
+import { ArrowLeft, RotateCcw, MapPin, Navigation, Zap,ArrowRight } from "lucide-react";
 import { BrowserRouter as Router, Switch, Route, useHistory } from "react-router-dom";
 
 function MapsTracker() {
@@ -168,7 +168,10 @@ function MapsTracker() {
     history.push("/mobiledashboard");
     // Add your navigation logic here
   };
-
+  const handleTrack = () => {
+    history.push("/mobiletimeline");
+    // Add your navigation logic here
+  };
   return (
     <div className="relative h-screen w-screen bg-gray-100 overflow-hidden">
       {/* Inline Styles */}
@@ -290,6 +293,15 @@ function MapsTracker() {
           >
             <ArrowLeft size={18} />
             <span>Kembali</span>
+          </button>
+          <button
+            onClick={handleTrack}
+            className="glassmorphism custom-button px-6 py-3 rounded-full flex items-center gap-2
+                     text-gray-700 hover:text-gray-900 font-medium"
+          >
+            
+            <span>Linimasa</span>
+            <ArrowRight size={18} />
           </button>
         </div>
       </div>

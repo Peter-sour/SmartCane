@@ -1,6 +1,5 @@
 // src/context/SocketContext.js
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-// ✅ 1. IMPORT useAuth UNTUK DAPAT TOKEN
 import { useAuth } from './AuthContext';
 
 // 1. Buat Context & Hook
@@ -29,20 +28,29 @@ export const SocketProvider = ({ children }) => {
   // State Log Riwayat
   const [logs, setLogs] = useState([]);
 
-  // Konfigurasi (Pastikan URL benar)
- // ✅ Gunakan HTTP dan WS biasa
+  // =================================================================
+  // ⚠️ KONFIGURASI NGROK (PENTING!)
+  // =================================================================
+  // Gunakan URL Ngrok kamu. 
+  // Perhatikan: API pakai 'https', WebSocket pakai 'wss'
   const API_BASE_URL = "http://localhost:5000/api";
   const WS_URL = "ws://localhost:5000";
 
-  // ✅ 2. AMBIL TOKEN DARI AuthContext
-  const { token } = useAuth(); // Kita butuh token untuk fetch log
+  // 3. AMBIL TOKEN DAN DATA USER (Untuk Filter ID)
+  const { token, user } = useAuth(); 
 
-  // Logika WebSocket (Tidak Berubah)
+  // Logika WebSocket
   useEffect(() => {
     let ws;
     let reconnectTimeout;
+
     const connectWebSocket = () => {
-      // ... (kode WebSocket tidak berubah) ...
+      // Cegah koneksi jika user belum login atau data user belum siap
+      if (!token || !user || !user.id_perangkat) {
+          console.log("⏳ [SocketContext] Menunggu login user...");
+          return;
+      }
+
       console.log(`🔌 [SocketContext] Mencoba koneksi ke ${WS_URL}...`);
       ws = new WebSocket(WS_URL);
       
@@ -55,7 +63,21 @@ export const SocketProvider = ({ children }) => {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("📦 [SocketContext] Data diterima:", data); 
+          
+          // ===========================================================
+          // 🔒 FILTER KEAMANAN: Cek ID Perangkat
+          // ===========================================================
+          // Jika data yang masuk punya ID, tapi BEDA dengan ID user login:
+          if (data.id_perangkat && user.id_perangkat) {
+              if (data.id_perangkat !== user.id_perangkat) {
+                  // ABAIKAN DATA INI (Jangan update state)
+                  // console.log(`⛔ Data diblokir. Masuk: ${data.id_perangkat} != Saya: ${user.id_perangkat}`);
+                  return; 
+              }
+          }
+
+          // Jika lolos filter, baru update tampilan:
+          console.log("📦 [SocketContext] Data valid:", data); 
           
           if (data.jarak_cm !== undefined) setJarak(data.jarak_cm);
           if (data.aktivitas !== undefined) setAktivitas(data.aktivitas);
@@ -92,68 +114,40 @@ export const SocketProvider = ({ children }) => {
         clearTimeout(reconnectTimeout); 
         if (ws) { ws.onclose = null; ws.close(); }
     };
-  }, [reconnectAttempt, WS_URL]);
+  // Tambahkan 'user' dan 'token' ke dependency array
+  }, [reconnectAttempt, WS_URL, user, token]);
 
-  // Logika Fetch Log (Perbaikan URL dan Token)
+  // Logika Fetch Log (Menggunakan NGROK URL)
   const fetchActivityLog = useCallback(async () => {
-      // ✅ 3. JANGAN FETCH JIKA TOKEN BELUM ADA (misal saat app baru load)
-      if (!token) {
-          console.log("[SocketContext] Menunggu token sebelum fetch log...");
-          return; 
-      }
+      if (!token) return;
 
-      console.log("[SocketContext] Mencoba fetch log dengan token...");
       try {
-          // ✅ 4. PERBAIKI URL ENDPOINT menjadi /data/logs
           const response = await fetch(`${API_BASE_URL}/data/logs`, {
-              method: 'GET', // (Optional, defaultnya GET)
+              method: 'GET',
               headers: {
-                  // ✅ 5. TAMBAHKAN HEADER OTENTIKASI
                   'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json' // (Biasanya tidak wajib untuk GET)
+                  'Content-Type': 'application/json'
               }
           });
 
-          if (!response.ok) {
-              const errorData = await response.json().catch(() => ({ message: `Gagal fetch logs (${response.status})` }));
-              throw new Error(errorData.message || `Gagal fetch logs (${response.status})`);
-          }
+          if (!response.ok) throw new Error(`Gagal fetch logs (${response.status})`);
 
           const data = await response.json();
-          console.log("📜 [SocketContext] Riwayat log di-fetch:", data);
           setLogs(data);
       } catch (error) {
           console.error("❌ [SocketContext] Error fetching logs:", error);
-          // Mungkin set logs ke [] atau tampilkan error di UI?
           setLogs([]); 
       }
-      // ✅ 6. TAMBAHKAN 'token' SEBAGAI DEPENDENSI useCallback
   }, [API_BASE_URL, token]);
 
-  // Panggil fetchActivityLog saat komponen dimuat ATAU saat token berubah
+  // Panggil fetchActivityLog saat token siap
   useEffect(() => {
-    // Panggil fetch HANYA JIKA token sudah ada
-    if(token) {
-       fetchActivityLog();
-    }
-  // ✅ 7. TAMBAHKAN 'token' SEBAGAI DEPENDENSI useEffect
+    if(token) fetchActivityLog();
   }, [fetchActivityLog, token]);
 
-  // 3. Sediakan semua state dan fungsi (Tidak Berubah)
   const value = {
-    jarak,
-    battery,
-    aktivitas,
-    akselerasi,
-    giroskop,
-    teganganBaterai,
-    kekuatanSinyal,
-    lastUpdate,
-    wsConnected,
-    akurasi_jarak,
-    akurasi_gyro,
-    akurasi_aksel,
-    logs,
+    jarak, battery, aktivitas, akselerasi, giroskop, teganganBaterai, kekuatanSinyal,
+    lastUpdate, wsConnected, akurasi_jarak, akurasi_gyro, akurasi_aksel, logs,
     fetchActivityLog,
   };
 
