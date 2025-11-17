@@ -247,7 +247,7 @@ export default function MobileTimeline() {
            ) : (
                <div className="text-center py-4">
                    <p className="text-sm font-semibold text-gray-600">Belum ada data pergerakan.</p>
-                   <p className="text-xs text-gray-400 mt-1">Alat perlu berpindah > 20m untuk merekam jalur.</p>
+                   <p className="text-xs text-gray-400 mt-1">Alat perlu berpindah  20m untuk merekam jalur.</p>
                </div>
            )}
         </div>
