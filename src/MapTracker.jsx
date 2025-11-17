@@ -163,10 +163,9 @@ function MapsTracker() {
       }
     );
   };
-
   const handleBack = () => {
     history.push("/mobiledashboard");
-    // Add your navigation logic here
+  
   };
   const handleTrack = () => {
     history.push("/mobiletimeline");
