@@ -20,7 +20,7 @@ const char* SSID_WIFI = "Malakul";
 const char* KATA_SANDI_WIFI = "malak123";
 
 // Backend (ganti ke IP laptopmu, contohnya "http://192.168.1.10:5000/api/data")
-const char* URL_SERVER = "http://10.52.73.203:5000/api/data";
+const char* URL_SERVER = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api/data/sensor";
 
 // Info perangkat
 const char* ID_PERANGKAT = "tongkat-001";

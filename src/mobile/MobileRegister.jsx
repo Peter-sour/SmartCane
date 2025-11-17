@@ -3,7 +3,7 @@ import { Link, useHistory } from "react-router-dom";
 // Menambahkan ikon Box untuk ID Perangkat
 import { Activity, User, Mail, Lock, Eye, EyeOff, Box } from "lucide-react"; 
 
-const API_URL = " https://mollusklike-intactly-kennedi.ngrok-free.dev/api/auth";
+const API_URL = "http://localhost:5000/api/auth";
 
 export default function Register() {
   const nav = useHistory();

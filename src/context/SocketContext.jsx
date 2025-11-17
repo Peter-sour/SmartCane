@@ -30,8 +30,9 @@ export const SocketProvider = ({ children }) => {
   const [logs, setLogs] = useState([]);
 
   // Konfigurasi (Pastikan URL benar)
-  const API_BASE_URL = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api";
-  const WS_URL = "wss://mollusklike-intactly-kennedi.ngrok-free.dev";
+ // ✅ Gunakan HTTP dan WS biasa
+  const API_BASE_URL = "http://localhost:5000/api";
+  const WS_URL = "ws://localhost:5000";
 
   // ✅ 2. AMBIL TOKEN DARI AuthContext
   const { token } = useAuth(); // Kita butuh token untuk fetch log
