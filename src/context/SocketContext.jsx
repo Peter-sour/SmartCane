@@ -50,7 +50,7 @@ export const SocketProvider = ({ children }) => {
           console.log("⏳ [SocketContext] Menunggu login user...");
           return;
       }
-
+      console.log()
       console.log(`🔌 [SocketContext] Mencoba koneksi ke ${WS_URL}...`);
       ws = new WebSocket(WS_URL);
       

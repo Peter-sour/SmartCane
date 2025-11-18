@@ -1,53 +1,50 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Preferences } from '@capacitor/preferences';
-import { jwtDecode } from "jwt-decode"; // Install: npm install jwt-decode
+import { jwtDecode } from "jwt-decode"; 
 
 // 1. Buat Context
 const AuthContext = createContext();
 
-// 2. Buat Provider (yang akan "membungkus" aplikasi Anda)
+// 2. Buat Provider
 export const AuthProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null); // Akan berisi { email, id, dll. }
+  const [user, setUser] = useState(null); 
   const [token, setToken] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // Untuk loading awal
+  const [isLoading, setIsLoading] = useState(true); 
 
-  // 3. Fungsi untuk mengecek auth saat aplikasi pertama kali dibuka
+  // 3. Fungsi Check Auth Awal
   useEffect(() => {
     const checkInitialAuth = async () => {
       try {
-        // Ambil token dari localStorage
         const storedToken = localStorage.getItem("token");
 
         if (storedToken) {
-          // Decode token untuk dapat data user & cek kadaluarsa
           const decodedToken = jwtDecode(storedToken);
-          
-          // Cek apakah token sudah kadaluarsa (exp = expired time)
           const isExpired = decodedToken.exp * 1000 < Date.now();
 
           if (isExpired) {
-            // Jika kadaluarsa, logout
             console.log("Token kadaluarsa, logout.");
             await logout();
           } else {
-            // Jika valid, set state
             console.log("Token valid, user login.");
             setToken(storedToken);
+            
+            // ✅ PERBAIKAN 1: Masukkan id_perangkat ke dalam state user saat load awal
             setUser({ 
-              email: decodedToken.email, // Asumsi email ada di token
-              id: decodedToken.id        // Asumsi id ada di token
+              email: decodedToken.email, 
+              id: decodedToken.id,
+              id_perangkat: decodedToken.id_perangkat // Ambil dari token
             });
+            
             setIsLoggedIn(true);
             await Preferences.set({ key: "isLoggedIn", value: "true" });
           }
         } else {
-          // Tidak ada token, pastikan logout
           await logout();
         }
       } catch (error) {
-        console.error("Error decoding token:", error);
-        await logout(); // Jika token invalid, paksa logout
+        console.error("Error checking auth:", error);
+        await logout(); 
       } finally {
         setIsLoading(false);
       }
@@ -59,22 +56,23 @@ export const AuthProvider = ({ children }) => {
   // 4. Fungsi Login
   const login = async (newToken, userData) => {
     try {
-      // Decode token untuk data user
       const decodedToken = jwtDecode(newToken);
 
-      // Simpan data ke state
       setToken(newToken);
+      
+      // ✅ PERBAIKAN 2: Masukkan id_perangkat ke dalam state user saat login
       setUser({
-        email: decodedToken.email, // Ambil dari token
-        id: decodedToken.id       // Ambil dari token
+        email: decodedToken.email, 
+        id: decodedToken.id,
+        id_perangkat: decodedToken.id_perangkat // Ambil dari token
       });
+      
       setIsLoggedIn(true);
       
-      // Simpan HANYA token ke localStorage
       localStorage.setItem("token", newToken);
-      localStorage.setItem("id_perangkat", decodedToken.id_perangkat); // Simpan id perangkat
+      // Simpan juga id_perangkat ke localStorage biar aman buat backup
+      localStorage.setItem("id_perangkat", decodedToken.id_perangkat); 
       
-      // Set preferences
       await Preferences.set({ key: "isLoggedIn", value: "true" });
 
     } catch (error) {
@@ -84,38 +82,35 @@ export const AuthProvider = ({ children }) => {
 
   // 5. Fungsi Logout
   const logout = async () => {
-    // Hapus dari state
     setUser(null);
     setToken(null);
     setIsLoggedIn(false);
     
-    // Hapus dari penyimpanan
     localStorage.removeItem("token");
     localStorage.removeItem("id_perangkat");
-    localStorage.removeItem("userEmail"); // (Sudah tidak dipakai)
     
     await Preferences.set({ key: "isLoggedIn", value: "false" });
   };
 
-  // 6. Jika masih loading, tampilkan loading screen
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        {/* Anda bisa ganti dengan logo/spinner */}
         <p>Memuat...</p> 
       </div>
     );
   }
 
-  // 7. Berikan nilai ke "pembungkus"
+  // 7. Berikan nilai ke pembungkus
   return (
+    // ✅ PERBAIKAN 3: Hapus 'id_perangkat' yang berdiri sendiri karena error undefined.
+    // Cukup kirim 'user', karena 'id_perangkat' sudah ada di dalam 'user'.
     <AuthContext.Provider value={{ isLoggedIn, user, token, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// 8. Buat custom hook agar gampang dipakai
+// 8. Custom Hook
 export const useAuth = () => {
   return useContext(AuthContext);
 };
