@@ -13,7 +13,7 @@ export default function MobileTimeline() {
   const mapInstanceRef = useRef(null);
 
   // Ganti URL sesuai Ngrok kamu
-  const API_BASE_URL = "http://localhost:5000/api"; 
+  const API_BASE_URL = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api"; 
 
   // 1. Fetch Data
   useEffect(() => {

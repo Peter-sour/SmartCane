@@ -33,8 +33,8 @@ export const SocketProvider = ({ children }) => {
   // =================================================================
   // Gunakan URL Ngrok kamu. 
   // Perhatikan: API pakai 'https', WebSocket pakai 'wss'
-  const API_BASE_URL = "http://localhost:5000/api";
-  const WS_URL = "ws://localhost:5000";
+  const API_BASE_URL = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api";
+  const WS_URL = "wss://mollusklike-intactly-kennedi.ngrok-free.dev";
 
   // 3. AMBIL TOKEN DAN DATA USER (Untuk Filter ID)
   const { token, user } = useAuth(); 

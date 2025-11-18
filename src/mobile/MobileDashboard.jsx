@@ -46,7 +46,7 @@ export default function Dashboard() {
   // KONFIGURASI & FUNGSI BANTU
   // ===================================
   // Ganti URL API jika perlu (sesuaikan dengan SocketContext)
-  const API_BASE_URL = "http://localhost:5000/api"; 
+  const API_BASE_URL = "https://mollusklike-intactly-kennedi.ngrok-free.dev/api"; 
 
   const goToLog = () => {
     history.push("/mobilelog");
